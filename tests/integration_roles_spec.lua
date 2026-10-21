@@ -175,6 +175,105 @@ t.case("the recording's sources open, recorded ones read-only", function()
   end
 end)
 
+--- The `files/selected` notifications sent since `from`.
+local function selections(from)
+  local out = {}
+  for i = from + 1, #sent do
+    if sent[i].method == "files/selected" then
+      out[#out + 1] = sent[i].params.path
+    end
+  end
+  return out
+end
+
+--- Put `win`'s cursor on the line showing `name`, from the main loop, so
+--- the tree's CursorMoved runs as it does for a user.
+local function cursor_on(win, name)
+  local buf = vim.api.nvim_win_get_buf(win)
+  for i, line in ipairs(vim.api.nvim_buf_get_lines(buf, 0, -1, false)) do
+    if line:find(name, 1, true) then
+      vim.api.nvim_win_set_cursor(win, { i, (line:find(name, 1, true)) - 1 })
+      return true
+    end
+  end
+  return false
+end
+
+--- Whether CodeTracer's own file tree has `path` selected: its pane, opened
+--- for the check, draws the selected row on the selection surface.
+local function tree_selects(path)
+  local name = vim.fs.basename(path)
+  local selected = nil
+  local au = vim.api.nvim_create_autocmd("User", {
+    pattern = "CodeTracerNotification",
+    callback = function(ev)
+      local p = ev.data.params
+      if ev.data.method == "pane/content" and p.pane == "fileTree" then
+        for _, row in ipairs(p.rows or {}) do
+          if row.text:find(name, 1, true) then
+            selected = false
+            for _, span in ipairs(row.spans or {}) do
+              if (span.surface or ""):match("selection") or (span.surface or ""):match("active") then
+                selected = true
+              end
+            end
+          end
+        end
+      end
+    end,
+  })
+  rpc.request(state.conn, "pane/open", { session = session.id, pane = "fileTree", width = 40, height = 12 })
+  t.wait_for(function()
+    return selected ~= nil
+  end, 10000, "the file pane's rows")
+  vim.api.nvim_del_autocmd(au)
+  rpc.request(state.conn, "pane/close", { session = session.id, pane = "fileTree" })
+  return selected
+end
+
+t.case("a file selected in netrw is reported, and CodeTracer's tree follows", function()
+  vim.cmd("runtime plugin/netrwPlugin.vim")
+  local file = session.position.file
+  local dir = vim.fs.dirname(file)
+  vim.api.nvim_set_current_tabpage(session.tab)
+  vim.cmd("vsplit")
+  local win = vim.api.nvim_get_current_win()
+  vim.cmd("Explore " .. vim.fn.fnameescape(dir))
+  t.wait_for(function()
+    return vim.bo.filetype == "netrw"
+  end, 5000, "netrw")
+  local from = #sent
+  t.check(cursor_on(win, vim.fs.basename(file)), "netrw lists the file")
+  t.wait_for(function()
+    return vim.tbl_contains(selections(from), file)
+  end, 5000, "files/selected for " .. file)
+  t.check(tree_selects(file), "CodeTracer's file tree selects it")
+  vim.api.nvim_win_close(win, true)
+end)
+
+t.case("a file selected in oil.nvim is reported", function()
+  local oil_path = vim.env.CODETRACER_TEST_OIL
+  if oil_path == nil then
+    t.check(false, "NOT RUN: set CODETRACER_TEST_OIL to an oil.nvim checkout (the dev shell does)")
+    return
+  end
+  vim.opt.runtimepath:prepend(oil_path)
+  require("oil").setup({ default_file_explorer = false })
+  local file = session.position.file
+  vim.api.nvim_set_current_tabpage(session.tab)
+  vim.cmd("vsplit")
+  local win = vim.api.nvim_get_current_win()
+  local from = #sent
+  require("oil").open(vim.fs.dirname(file))
+  t.wait_for(function()
+    return vim.bo.filetype == "oil" and cursor_on(win, vim.fs.basename(file))
+  end, 10000, "oil to list the file")
+  t.wait_for(function()
+    return vim.tbl_contains(selections(from), file)
+  end, 5000, "files/selected for " .. file)
+  vim.api.nvim_win_close(win, true)
+end)
+
 t.case("the frame viewer's frames are drawn through the image plugin", function()
   if gfx_trace == nil then
     t.check(false, "NOT RUN: set CODETRACER_CT_GFX_PLAYER_CMD and CODETRACER_TEST_GFX_STREAM to run the image case")

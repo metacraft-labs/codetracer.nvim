@@ -191,6 +191,41 @@ t.case("a step moves the position and updates the panes", function()
   t.eq(vim.api.nvim_win_get_cursor(first.editor_win)[1], first.position.line, "the cursor follows")
 end)
 
+t.case("a file CodeTracer's file pane opens is shown in the source window", function()
+  vim.api.nvim_set_current_tabpage(first.tab)
+  local tree = first.panes.fileTree
+  local open
+  for i = 0, tree.height - 1 do
+    for _, h in ipairs((tree.rows[i] or {}).hotspots or {}) do
+      if h.operation == "file-tree.open" then
+        open = h
+      end
+    end
+  end
+  t.check(open ~= nil, "the file pane offers a file to open")
+  if open == nil then
+    return
+  end
+  -- The source window shows something else first.
+  local other = vim.api.nvim_create_buf(true, true)
+  vim.api.nvim_win_set_buf(first.editor_win, other)
+  -- The row's own hotspot, as <CR> on it runs it.
+  local win = window_of(first, "fileTree")
+  vim.api.nvim_set_current_win(win)
+  for i = 0, tree.height - 1 do
+    for _, h in ipairs((tree.rows[i] or {}).hotspots or {}) do
+      if h == open then
+        vim.api.nvim_win_set_cursor(win, { i + 1, h.start })
+      end
+    end
+  end
+  require("codetracer.panes").activate(tree.buf, false)
+  t.wait_for(function()
+    return vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(first.editor_win)) == open.args.path
+  end, 15000, "source/show to put " .. open.args.path .. " in the source window")
+  vim.api.nvim_buf_delete(other, { force = true })
+end)
+
 t.case("resizing a pane's window changes the window the server paints", function()
   local win = window_of(first, "calltrace")
   local p = first.panes.calltrace

@@ -81,6 +81,10 @@ local function on_notification(method, params)
     if session then
       source.apply_position(session, params)
     end
+  elseif method == "source/show" then
+    if session then
+      files.show(session, params.file)
+    end
   elseif method == "source/decorations" then
     if session then
       source.apply_decorations(session, params)

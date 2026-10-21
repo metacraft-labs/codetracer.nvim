@@ -141,12 +141,109 @@ function M.report(changes)
   end
 end
 
+-- ---------------------------------------------------------------------------
+-- The editor's tree selection (`files/selected`)
+-- ---------------------------------------------------------------------------
+
+--- The path a tree buffer's cursor is on, by the tree's filetype: each tree
+--- answers through its own API. nil when the cursor is on nothing.
+M.SELECTION = {
+  NvimTree = function()
+    local ok, api = pcall(require, "nvim-tree.api")
+    local node = ok and api.tree.get_node_under_cursor() or nil
+    return node and node.absolute_path or nil
+  end,
+  ["neo-tree"] = function()
+    local ok, manager = pcall(require, "neo-tree.sources.manager")
+    if not ok then
+      return nil
+    end
+    local st = manager.get_state("filesystem")
+    local node = st and st.tree and st.tree:get_node() or nil
+    return node and node.path or nil
+  end,
+  oil = function()
+    local ok, oil = pcall(require, "oil")
+    if not ok then
+      return nil
+    end
+    local entry = oil.get_cursor_entry()
+    local dir = oil.get_current_dir()
+    if entry == nil or dir == nil or entry.name == ".." then
+      return nil
+    end
+    return vim.fs.joinpath(dir, entry.name)
+  end,
+  netrw = function()
+    local dir = vim.b.netrw_curdir
+    if dir == nil then
+      return nil
+    end
+    local word = vim.fn.expand("<cfile>")
+    if word == "" or word == "../" or word == "./" then
+      return nil
+    end
+    return vim.fs.joinpath(dir, (word:gsub("/$", "")))
+  end,
+}
+
+-- The path each tree buffer last reported, so a cursor moving within one
+-- entry reports it once — per tree: another tree selecting the same file is
+-- a selection of its own.
+local last_selected = {}
+
+--- Report the tree's selection, when the editor fills the file tree role.
+function M.report_selection(filetype)
+  if not M.ceded() or state.conn == nil then
+    return
+  end
+  local get = M.SELECTION[filetype]
+  if get == nil then
+    return
+  end
+  local ok, path = pcall(get)
+  if not ok or path == nil or path == "" then
+    return
+  end
+  path = vim.fs.normalize(vim.fn.fnamemodify(path, ":p")):gsub("/$", "")
+  local buf = vim.api.nvim_get_current_buf()
+  if last_selected[buf] == path then
+    return
+  end
+  last_selected[buf] = path
+  for _, s in pairs(state.sessions) do
+    rpc.notify(state.conn, "files/selected", { session = s.id, path = path })
+  end
+end
+
+--- Apply `source/show`: a pane opened a file (a row of CodeTracer's file
+--- pane, a search result); show it in the source window — the recorded
+--- text, read-only, when it is not on disk.
+function M.show(session, file)
+  M.source_buffer(session, file, function(buf)
+    local win = session.editor_win
+    if buf and win and vim.api.nvim_win_is_valid(win) then
+      vim.api.nvim_win_set_buf(win, buf)
+      require("codetracer.source").report_viewport(session)
+    end
+  end)
+end
+
 local new_files = {}
 
 --- Hook the editor's file events: a buffer written to a file that did not
 --- exist (any tree, or `:edit new.py` then `:write`), and the events of the
 --- trees that publish them — nvim-tree, neo-tree and oil.nvim.
 function M.attach(group)
+  vim.api.nvim_create_autocmd("CursorMoved", {
+    group = group,
+    callback = function(ev)
+      local ft = vim.bo[ev.buf].filetype
+      if M.SELECTION[ft] then
+        M.report_selection(ft)
+      end
+    end,
+  })
   vim.api.nvim_create_autocmd("BufWritePre", {
     group = group,
     callback = function(ev)

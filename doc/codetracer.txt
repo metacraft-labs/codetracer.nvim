@@ -241,9 +241,15 @@ file tree is CodeTracer's file pane unless you cede it: >lua
 <
 CodeTracer's file pane is then left out of every layout, and your file tree
 (netrw, nvim-tree, neo-tree, oil.nvim, …) takes its place: files you open are
-shown and decorated in the source window, and the files your tree creates,
-renames or deletes are reported to CodeTracer (nvim-tree, neo-tree and
-oil.nvim through their events; any new file when it is first written).
+shown and decorated in the source window, the file your tree's cursor is on
+is CodeTracer's file tree selection (nvim-tree, neo-tree, oil.nvim, netrw),
+and the files your tree creates, renames or deletes are reported to CodeTracer
+(nvim-tree, neo-tree and oil.nvim through their events; any new file when it
+is first written).
+
+When CodeTracer's own file pane opens a file (<CR> on its row) the file is
+shown in the source window — the recorded text, read-only, when it is not on
+disk.
 |:CodeTracer-sources| lists the recording's own files, including those that
 are not in your project.
 

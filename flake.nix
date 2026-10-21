@@ -65,6 +65,9 @@
             ];
             # The image.nvim that `just test-image-nvim` draws frames through.
             CODETRACER_TEST_IMAGE_NVIM = "${pkgs.vimPlugins.image-nvim}";
+            # The oil.nvim the roles suite selects files in (the file tree
+            # role's `files/selected`).
+            CODETRACER_TEST_OIL = "${pkgs.vimPlugins.oil-nvim}";
             shellHook = ''
               echo "codetracer.nvim dev shell — $(nvim --version | head -1)"
             ''
