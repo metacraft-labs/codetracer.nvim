@@ -11,6 +11,9 @@ local panes = require("codetracer.panes")
 local layout = require("codetracer.layout")
 local source = require("codetracer.source")
 local hl = require("codetracer.highlights")
+local images = require("codetracer.images")
+local files = require("codetracer.files")
+local persist = require("codetracer.persist")
 
 local M = {}
 
@@ -24,6 +27,14 @@ M.defaults = {
   mappings = {},
   --- `j`/`k` do what Down/Up do in a pane, unless you bind them yourself.
   vim_motions = true,
+  --- Draw images (the frame viewer's frames) through image.nvim when it is
+  --- installed; `false` stays text-only.
+  images = true,
+  --- Panel roles (§E8): `fileTree = "editor"` cedes the file tree to your own
+  --- (netrw, nvim-tree, neo-tree, oil.nvim): CodeTracer's file pane is then
+  --- left out of the layouts, and `:CodeTracer sources` lists the recording's
+  --- files, opening those not on disk as read-only buffers.
+  panels = { fileTree = "codetracer" },
 }
 
 local function server_cmd()
@@ -50,7 +61,16 @@ local function on_notification(method, params)
       panes.apply_keymap(session, params)
     end
   elseif method == "layout/changed" then
-    if session then
+    if session and session.pending_adopt then
+      -- A restored session (`:mksession`): its windows are the editor's.
+      session.mode = params.mode
+      session.layout = params.layout
+      if params.mode == session.pending_adopt.mode then
+        local adopt = session.pending_adopt
+        session.pending_adopt = nil
+        persist.adopt(session, adopt)
+      end
+    elseif session then
       local same = session.mode == params.mode and vim.deep_equal(session.layout, params.layout)
       session.mode = params.mode
       if not same or session.tab == nil or not vim.api.nvim_tabpage_is_valid(session.tab) then
@@ -90,7 +110,7 @@ function M.with_server(fn)
   rpc.start({
     cmd = server_cmd(),
     env = state.opts.env,
-    capabilities = { media = { "text" }, tabs = true, mouseResize = true },
+    capabilities = { media = images.media(), tabs = true, mouseResize = true },
     on_notification = on_notification,
     on_exit = function(code)
       state.conn = nil
@@ -134,7 +154,10 @@ end
 --- Open a recording in a new session, in its own tab page.
 ---@param trace string the recording's folder
 ---@param cb fun(session: codetracer.Session|nil, err: string|nil)|nil
-function M.open(trace, cb)
+---@param adopt {tab: integer, windows: table<integer, string>, mode: string}|nil
+---  windows a restored session file kept for it (`persist`), adopted instead
+---  of building the layout afresh
+function M.open(trace, cb, adopt)
   trace = vim.fn.fnamemodify(vim.fn.expand(trace), ":p"):gsub("/$", "")
   M.with_server(function(conn)
     rpc.request(conn, "session/open", { trace = trace }, function(err, result)
@@ -157,10 +180,21 @@ function M.open(trace, cb)
         windows = {},
         expected_sizes = {},
         realising = false,
+        graphics = result.graphics,
       }
       state.sessions[session.id] = session
       M.operations(function() end)
-      layout.realise(session, result.layout)
+      if adopt and adopt.tab and vim.api.nvim_tabpage_is_valid(adopt.tab) then
+        session.pending_adopt = adopt
+        if result.mode == adopt.mode then
+          session.pending_adopt = nil
+          persist.adopt(session, adopt)
+        else
+          M.run("session.toggle-product-mode", nil, session)
+        end
+      else
+        layout.realise(session, result.layout)
+      end
       if cb then
         cb(session, nil)
       end
@@ -317,6 +351,18 @@ local SUBCOMMANDS = {
   stop = function()
     M.stop()
   end,
+  frames = function()
+    local s = state.current_session()
+    if s then
+      images.toggle_frames(s)
+    end
+  end,
+  sources = function()
+    local s = state.current_session()
+    if s then
+      files.pick_source(s)
+    end
+  end,
 }
 
 function M.command(opts)
@@ -402,9 +448,17 @@ function M.setup(opts)
       local s = state.current_session()
       if s and s.editor_win == vim.api.nvim_get_current_win() then
         source.report_viewport(s)
+        source.report_cursor(s)
       end
     end,
   })
+  vim.api.nvim_create_autocmd("SessionWritePost", {
+    group = group,
+    callback = function()
+      persist.write(vim.v.this_session)
+    end,
+  })
+  files.attach(group)
   vim.api.nvim_create_autocmd("VimLeavePre", {
     group = group,
     callback = function()

@@ -27,15 +27,6 @@ local function editor_win(session)
 end
 
 --- The buffer for `file`, loaded.
-local function file_buf(file)
-  local buf = vim.fn.bufadd(file)
-  vim.bo[buf].buflisted = true
-  if not vim.api.nvim_buf_is_loaded(buf) then
-    vim.fn.bufload(buf)
-  end
-  return buf
-end
-
 local function mark_position(session)
   local pos = session.position
   local buf = session.source_buf
@@ -63,24 +54,55 @@ end
 --- on the line, the line marked.
 function M.apply_position(session, params)
   session.position = params
-  local win = editor_win(session)
-  if params.file and params.file ~= "" then
-    local ok, buf = pcall(file_buf, params.file)
-    if ok then
-      session.source_buf = buf
-      if win then
-        vim.api.nvim_win_set_buf(win, buf)
-        local line = math.max(1, math.min(params.line or 1, vim.api.nvim_buf_line_count(buf)))
-        local col = math.max(0, (params.column or 1) - 1)
-        pcall(vim.api.nvim_win_set_cursor, win, { line, col })
-        vim.api.nvim_win_call(win, function()
-          vim.cmd("normal! zz")
-        end)
-      end
-    end
+  if params.file == nil or params.file == "" then
+    mark_position(session)
+    return
   end
-  mark_position(session)
-  M.report_viewport(session)
+  -- The file on disk, or — for a source the recording holds but the disk
+  -- does not — a read-only buffer of the recorded text (§E8).
+  require("codetracer.files").source_buffer(session, params.file, function(buf)
+    if buf == nil or session.position ~= params then
+      return
+    end
+    session.source_buf = buf
+    local win = editor_win(session)
+    if win then
+      vim.api.nvim_win_set_buf(win, buf)
+      local line = math.max(1, math.min(params.line or 1, vim.api.nvim_buf_line_count(buf)))
+      local col = math.max(0, (params.column or 1) - 1)
+      pcall(vim.api.nvim_win_set_cursor, win, { line, col })
+      vim.api.nvim_win_call(win, function()
+        vim.cmd("normal! zz")
+      end)
+    end
+    mark_position(session)
+    M.report_viewport(session)
+  end)
+end
+
+--- Report where the cursor is in the source window (`source/cursor`): the
+--- line an operation "at the cursor" — a breakpoint, a tracepoint — acts on.
+function M.report_cursor(session)
+  local win = editor_win(session)
+  if win == nil then
+    return
+  end
+  local file = require("codetracer.files").file_of(vim.api.nvim_win_get_buf(win))
+  if file == "" then
+    return
+  end
+  local cursor = vim.api.nvim_win_get_cursor(win)
+  local key = ("%s:%d:%d"):format(file, cursor[1], cursor[2])
+  if session.cursor_sent == key then
+    return
+  end
+  session.cursor_sent = key
+  rpc.notify(state.conn, "source/cursor", {
+    session = session.id,
+    file = file,
+    line = cursor[1],
+    column = cursor[2] + 1,
+  })
 end
 
 --- Report the source window's visible lines, if they changed.
@@ -90,7 +112,7 @@ function M.report_viewport(session)
     return
   end
   local buf = vim.api.nvim_win_get_buf(win)
-  local file = vim.api.nvim_buf_get_name(buf)
+  local file = require("codetracer.files").file_of(buf)
   if file == "" then
     return
   end
@@ -119,8 +141,16 @@ function M.apply_decorations(session, params)
   if params.file == nil or params.file == "" then
     return
   end
-  local buf = vim.fn.bufnr(params.file)
-  if buf == -1 or not vim.api.nvim_buf_is_loaded(buf) then
+  -- The buffer showing that file: the file's own, or its recorded copy.
+  local files = require("codetracer.files")
+  local buf = -1
+  for _, b in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_is_loaded(b) and files.file_of(b) == params.file then
+      buf = b
+      break
+    end
+  end
+  if buf == -1 then
     return
   end
   session.decorations = session.decorations or {}

@@ -24,8 +24,19 @@ function M.ensure_buf(session, pane)
   if pane.buf and vim.api.nvim_buf_is_valid(pane.buf) then
     return pane.buf
   end
-  local buf = vim.api.nvim_create_buf(false, true)
-  vim.api.nvim_buf_set_name(buf, buf_name(session, pane))
+  -- A buffer of that name already exists when a session file (`:mksession`)
+  -- restored the windows a pane was in: it is taken over, not duplicated.
+  local name = buf_name(session, pane)
+  local buf = nil
+  for _, b in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_get_name(b) == name then
+      buf = b
+    end
+  end
+  if buf == nil then
+    buf = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_buf_set_name(buf, name)
+  end
   vim.bo[buf].buftype = "nofile"
   vim.bo[buf].bufhidden = "hide"
   vim.bo[buf].swapfile = false
@@ -83,6 +94,9 @@ function M.apply_content(session, params)
     end
   end
   M.render(session, pane, params.full, params.rows)
+  if params.image then
+    require("codetracer.images").show(session, pane, params.image)
+  end
 end
 
 local function set_row_marks(buf, index, row)

@@ -13,6 +13,9 @@ CONTENTS                                                  *codetracer-contents*
   8. Highlight groups ......................... |codetracer-highlights|
   9. Debug Adapter Protocol ................... |codetracer-dap|
  10. Health ................................... |codetracer-health|
+ 11. Saved sessions ........................... |codetracer-sessions|
+ 12. Images and the frame viewer .............. |codetracer-images|
+ 13. Panel roles .............................. |codetracer-roles|
 
 ==============================================================================
 1. INTRODUCTION                                              *codetracer-intro*
@@ -51,6 +54,12 @@ The plugin works without calling `setup`; call it to change the defaults: >lua
     },
     -- j/k do what Down/Up do in a pane, unless you bind them yourself.
     vim_motions = true,
+    -- Draw the frame viewer's frames through image.nvim when it is set up
+    -- (|codetracer-images|); false stays text-only.
+    images = true,
+    -- Panel roles (|codetracer-roles|): "editor" cedes the file tree to
+    -- your own (netrw, nvim-tree, neo-tree, oil.nvim).
+    panels = { fileTree = "codetracer" },
   })
 <
 ==============================================================================
@@ -77,6 +86,15 @@ The plugin works without calling `setup`; call it to change the defaults: >lua
 :CodeTracer stack-next / stack-previous            *:CodeTracer-stack-next*
     In a window that shows one of several stacked panes (its |winbar| lists
     them), show the next / previous one.
+
+:CodeTracer frames                                      *:CodeTracer-frames*
+    Show or hide the frame viewer, for a recording that carries graphics
+    (|codetracer-images|).
+
+:CodeTracer sources                                    *:CodeTracer-sources*
+    Pick one of the recording's source files and show it in the source
+    window; a file that is not on disk opens as a read-only buffer of the
+    recorded text (|codetracer-roles|).
 
 :CodeTracer close                                        *:CodeTracer-close*
     Close the current session and its tab page.
@@ -143,7 +161,13 @@ shows them as the editor's. `:` and `<C-w>` are always left to Neovim.
 7. SOURCE BUFFERS                                           *codetracer-source*
 
 The source window follows the debugger: the file it stopped in, the cursor on
-the line, the line marked with a sign and `CodeTracerExecutionLine`. For the
+the line, the line marked with a sign and `CodeTracerExecutionLine`. A file
+the recording holds but your disk does not opens as a read-only buffer
+(`codetracer-source://…`) of the recorded text.
+
+Where your cursor is in the source window is CodeTracer's caret: an operation
+that acts at the cursor — `:CodeTracer editor.toggle-breakpoint`, a
+tracepoint — acts on the line your cursor is on. For the
 lines the window shows, the server sends what to draw: the values at the
 execution line and flow values as virtual text, breakpoints and tracepoints in
 the sign column.
@@ -184,5 +208,43 @@ the same session: a step from nvim-dap moves the panes too. >lua
 
 `:checkhealth codetracer` checks the Neovim version, finds the pane server,
 and asks it for its protocol version.
+
+==============================================================================
+11. SAVED SESSIONS                                       *codetracer-sessions*
+
+CodeTracer sessions are saved with Neovim's own |:mksession|. Beside the
+session file the plugin writes its "extra" file (`Sessionx.vim`, see
+|:mksession|), naming the recording each tab page showed, its mode, and the
+pane each window held. Loading the session (`nvim -S Session.vim`, or
+`:source`) opens each recording again and puts its panes back into the
+windows the session kept, at their sizes, beside any windows of your own; that
+arrangement becomes the mode's layout. The layout CodeTracer would choose is
+used only for a tab page the session file did not keep.
+
+==============================================================================
+12. IMAGES AND THE FRAME VIEWER                            *codetracer-images*
+
+Neovim draws no images itself. When image.nvim is installed and set up (with
+a backend for your terminal), the plugin tells the pane server it can show
+images, and the frame viewer (|:CodeTracer-frames|) of a recording that
+carries graphics draws each frame below its text rows. Without image.nvim, or
+with `setup({ images = false })`, everything stays text: the frame viewer's
+rows say which frame is shown, and its ◀ / ▶ still move between frames.
+
+==============================================================================
+13. PANEL ROLES                                             *codetracer-roles*
+
+The source editor is always Neovim's own buffers (|codetracer-source|). The
+file tree is CodeTracer's file pane unless you cede it: >lua
+
+  require("codetracer").setup({ panels = { fileTree = "editor" } })
+<
+CodeTracer's file pane is then left out of every layout, and your file tree
+(netrw, nvim-tree, neo-tree, oil.nvim, …) takes its place: files you open are
+shown and decorated in the source window, and the files your tree creates,
+renames or deletes are reported to CodeTracer (nvim-tree, neo-tree and
+oil.nvim through their events; any new file when it is first written).
+|:CodeTracer-sources| lists the recording's own files, including those that
+are not in your project.
 
  vim:tw=78:ts=8:ft=help:norl:

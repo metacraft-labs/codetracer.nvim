@@ -58,7 +58,13 @@
               stylua
               lua51Packages.luacheck
               nixfmt
+              # `just test-image-nvim`: image.nvim's ImageMagick processor,
+              # and a pseudo-terminal (`script`) for its terminal size query.
+              imagemagick
+              util-linux
             ];
+            # The image.nvim that `just test-image-nvim` draws frames through.
+            CODETRACER_TEST_IMAGE_NVIM = "${pkgs.vimPlugins.image-nvim}";
             shellHook = ''
               echo "codetracer.nvim dev shell — $(nvim --version | head -1)"
             ''

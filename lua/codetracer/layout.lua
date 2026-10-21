@@ -17,6 +17,10 @@ local function drawable(name)
   if name == "editor" then
     return true
   end
+  -- A role ceded to the editor (§E8) is not CodeTracer's pane any more.
+  if name == "fileTree" and require("codetracer.files").ceded() then
+    return false
+  end
   local info = state.conn and state.conn.info
   local list = info and info.capabilities and info.capabilities.panes or {}
   return vim.tbl_contains(list, name)
@@ -332,6 +336,11 @@ function M.realise(session, layout)
       vim.api.nvim_set_current_win(previous_win)
     end
   end
+  -- The frame viewer is not a layout pane; it comes back where it was.
+  if session.frames_open then
+    session.frames_win = nil
+    require("codetracer.images").open_frames(session)
+  end
   require("codetracer.source").refresh(session)
 end
 
@@ -384,6 +393,10 @@ function M.check_sizes(session)
         end
       end
     end
+  end
+  local fw = session.frames_win
+  if fw and vim.api.nvim_win_is_valid(fw) and session.panes.frameViewer then
+    panes.report_size(session, session.panes.frameViewer, fw)
   end
   if not changed then
     return
@@ -438,6 +451,12 @@ function M.stack_next(session, win, delta)
   if name ~= "editor" then
     panes.report_size(session, state.pane(session, name), win)
   end
+end
+
+--- The weights the realised tree's leaves now have (`layout/edited`'s
+--- `sizes`).
+function M.measured(tree)
+  return measured_weights(tree, {})
 end
 
 return M
