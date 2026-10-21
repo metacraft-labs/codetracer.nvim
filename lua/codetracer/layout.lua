@@ -107,19 +107,6 @@ local function show_leaf(session, node, win, parent_kind)
   session.windows[win] = info
 end
 
-local function first_window(node)
-  if node.win then
-    return node.win
-  end
-  for _, c in ipairs(node.children or {}) do
-    local w = first_window(c)
-    if w then
-      return w
-    end
-  end
-  return nil
-end
-
 --- Each child's share of `total` cells, by weight; the rounding remainder
 --- goes to the last.
 local function shares(node, total)
@@ -362,11 +349,9 @@ local function measured_weights(node, out)
   local horizontal = node.kind == "row"
   local cells, total_cells, total_weight = {}, 0, 0
   for i, c in ipairs(node.children) do
-    local w = first_window(c)
-    local n = 0
-    if w and vim.api.nvim_win_is_valid(w) then
-      n = horizontal and vim.api.nvim_win_get_width(w) or vim.api.nvim_win_get_height(w)
-    end
+    -- The whole subtree's span, not its first window's: a nested container
+    -- is as wide as all of its windows together.
+    local n = extent(c, horizontal)
     cells[i] = n
     total_cells = total_cells + n
     total_weight = total_weight + (c.weight or 1)

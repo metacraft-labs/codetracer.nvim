@@ -105,7 +105,11 @@ local function set_row_marks(buf, index, row)
           priority = 110,
         })
       end
-      for attr, group in pairs({ bold = "CodeTracerBold", italic = "CodeTracerItalic", underline = "CodeTracerUnderline" }) do
+      for attr, group in pairs({
+        bold = "CodeTracerBold",
+        italic = "CodeTracerItalic",
+        underline = "CodeTracerUnderline",
+      }) do
         if span[attr] then
           vim.api.nvim_buf_set_extmark(buf, hl.namespace, index, s, {
             end_col = e,
@@ -119,7 +123,7 @@ local function set_row_marks(buf, index, row)
 end
 
 --- Draw the model into the buffer: every row when `full`, else only `changed`.
-function M.render(session, pane, full, changed)
+function M.render(_, pane, full, changed)
   local buf = pane.buf
   if buf == nil or not vim.api.nvim_buf_is_valid(buf) then
     return

@@ -1,5 +1,5 @@
 --- Unit tests that need no pane server: key spellings, style → group names,
---- and layout pruning. Run: nvim --headless --clean -u NONE -l tests/unit_spec.lua
+--- and layout pruning. Run: nvim --headless --clean -u NONE -c "luafile tests/unit_spec.lua"
 vim.opt.runtimepath:prepend(vim.fn.getcwd())
 package.path = vim.fn.getcwd() .. "/tests/?.lua;" .. package.path
 local t = require("harness")
@@ -60,11 +60,16 @@ t.case("a layout keeps only what the editor can show", function()
   local tree = layout.prune({
     kind = "row",
     children = {
-      { kind = "stack", activeIndex = 2, weight = 10, children = {
-        { kind = "pane", pane = "agentActivity" },
-        { kind = "pane", pane = "state" },
-        { kind = "pane", pane = "calltrace" },
-      } },
+      {
+        kind = "stack",
+        activeIndex = 2,
+        weight = 10,
+        children = {
+          { kind = "pane", pane = "agentActivity" },
+          { kind = "pane", pane = "state" },
+          { kind = "pane", pane = "calltrace" },
+        },
+      },
       { kind = "pane", pane = "editor", weight = 30 },
       { kind = "pane", pane = "testResults", weight = 5 },
     },

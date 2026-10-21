@@ -125,9 +125,11 @@ end
 --- `ct.value-modified` → `CodeTracerValueModified`.
 function M.group_of(style)
   local role = style:gsub("^ct%.", "")
-  local camel = role:gsub("(%w+)", function(w)
-    return w:sub(1, 1):upper() .. w:sub(2)
-  end):gsub("[^%w]", "")
+  local camel = role
+    :gsub("(%w+)", function(w)
+      return w:sub(1, 1):upper() .. w:sub(2)
+    end)
+    :gsub("[^%w]", "")
   return "CodeTracer" .. camel, role
 end
 

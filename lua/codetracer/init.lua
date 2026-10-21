@@ -66,7 +66,10 @@ local function on_notification(method, params)
       source.apply_decorations(session, params)
     end
   end
-  vim.api.nvim_exec_autocmds("User", { pattern = "CodeTracerNotification", data = { method = method, params = params } })
+  vim.api.nvim_exec_autocmds(
+    "User",
+    { pattern = "CodeTracerNotification", data = { method = method, params = params } }
+  )
 end
 
 -- ---------------------------------------------------------------------------
@@ -136,7 +139,10 @@ function M.open(trace, cb)
   M.with_server(function(conn)
     rpc.request(conn, "session/open", { trace = trace }, function(err, result)
       if err then
-        vim.notify("codetracer: cannot open " .. trace .. ": " .. (err.message or vim.inspect(err)), vim.log.levels.ERROR)
+        vim.notify(
+          "codetracer: cannot open " .. trace .. ": " .. (err.message or vim.inspect(err)),
+          vim.log.levels.ERROR
+        )
         if cb then
           cb(nil, err.message)
         end

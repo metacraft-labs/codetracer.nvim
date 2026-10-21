@@ -27,7 +27,9 @@ function M.check()
   local state = require("codetracer.state")
   if state.conn and state.conn.info then
     local info = state.conn.info
-    health.ok(("running: %s, protocol %d"):format(info.serverInfo and info.serverInfo.version or "?", info.protocolVersion))
+    health.ok(
+      ("running: %s, protocol %d"):format(info.serverInfo and info.serverInfo.version or "?", info.protocolVersion)
+    )
     return
   end
 
@@ -56,7 +58,9 @@ function M.check()
   if failure then
     health.error("the pane server did not initialize: " .. failure)
   elseif result then
-    health.ok(("protocol %d (%s)"):format(result.protocolVersion, result.serverInfo and result.serverInfo.version or "?"))
+    health.ok(
+      ("protocol %d (%s)"):format(result.protocolVersion, result.serverInfo and result.serverInfo.version or "?")
+    )
     local dap = result.capabilities and result.capabilities.dap
     if dap and dap ~= vim.NIL then
       health.ok("DAP endpoint available (require('codetracer').dap_adapter() for nvim-dap)")

@@ -13,8 +13,15 @@ M.SUPPORTED_PROTOCOLS = { [1] = true }
 ---@field info table|nil the server's `initialize` result
 ---@field closed boolean
 
+---@class codetracer.StartOptions
+---@field cmd string[]
+---@field env table|nil
+---@field capabilities table
+---@field on_notification fun(method: string, params: table)
+---@field on_exit fun(code: integer, signal: integer)|nil
+
 --- Start the server and initialize it.
----@param opts {cmd: string[], env: table|nil, capabilities: table, on_notification: fun(method: string, params: table), on_exit: fun(code: integer, signal: integer)|nil}
+---@param opts codetracer.StartOptions
 ---@param on_ready fun(conn: codetracer.Connection|nil, err: string|nil)
 function M.start(opts, on_ready)
   local conn = { closed = false }

@@ -1,0 +1,188 @@
+*codetracer.txt*  CodeTracer's panes in Neovim
+
+==============================================================================
+CONTENTS                                                  *codetracer-contents*
+
+  1. Introduction ............................. |codetracer-intro|
+  2. Setup .................................... |codetracer-setup|
+  3. Commands ................................. |codetracer-commands|
+  4. Sessions and layouts ..................... |codetracer-layouts|
+  5. Panes .................................... |codetracer-panes|
+  6. Key bindings ............................. |codetracer-keys|
+  7. Source buffers ........................... |codetracer-source|
+  8. Highlight groups ......................... |codetracer-highlights|
+  9. Debug Adapter Protocol ................... |codetracer-dap|
+ 10. Health ................................... |codetracer-health|
+
+==============================================================================
+1. INTRODUCTION                                              *codetracer-intro*
+
+CodeTracer is a time-traveling debugger: it replays a recording of a program
+and lets you move through it in both directions. This plugin shows its panes
+(call trace, state, event log, terminal output, …) in Neovim windows, binds
+CodeTracer's keys in them, and marks the debugger's position and the values
+it recorded in your source buffers.
+
+The plugin is a view. The recording, the debugging session, what is loaded,
+the layout of each mode and the key bindings live in CodeTracer's pane
+server, `codetracer-tui --pane-server`, which the plugin starts and talks to
+with JSON-RPC over stdio (|vim.lsp.rpc|). Neovim owns the windows, the source
+buffers and your configuration.
+
+Requires Neovim 0.10 or newer and a CodeTracer build that provides
+`codetracer-tui` (pane-server protocol version 1).
+
+==============================================================================
+2. SETUP                                                     *codetracer-setup*
+
+The plugin works without calling `setup`; call it to change the defaults: >lua
+
+  require("codetracer").setup({
+    -- The pane server. Default: $CODETRACER_TUI, else `codetracer-tui` on
+    -- PATH, with `--pane-server`.
+    cmd = { "/path/to/codetracer-tui", "--pane-server" },
+    -- Extra environment for the server process.
+    env = nil,
+    -- Your own bindings in CodeTracer panes. They win over CodeTracer's
+    -- keymap (|codetracer-keys|). Keys are pane names, or "*" for every pane.
+    mappings = {
+      calltrace = { ["<Down>"] = function() ... end },
+      ["*"] = { ["q"] = "<Cmd>CodeTracer close<CR>" },
+    },
+    -- j/k do what Down/Up do in a pane, unless you bind them yourself.
+    vim_motions = true,
+  })
+<
+==============================================================================
+3. COMMANDS                                               *codetracer-commands*
+
+:CodeTracer open [{trace}]                               *:CodeTracer-open*
+    Open the recording in folder {trace} (default: the current directory)
+    in a new session, in its own tab page.
+
+:CodeTracer {operation} [{argument}]                          *:CodeTracer*
+    Run an operation of CodeTracer's catalogue on the current tab page's
+    session: `:CodeTracer step-over`, `:CodeTracer debugger.reverse-continue`,
+    `:CodeTracer layout.focus-pane variables`. A short name is the catalogue
+    entry it uniquely ends. Completion lists the catalogue.
+
+:CodeTracer mode                                          *:CodeTracer-mode*
+    Switch the session between debugging and editing. Its tab page is
+    re-arranged to the other mode's layout.
+
+:CodeTracer sessions                                  *:CodeTracer-sessions*
+    Pick a session to show (|vim.ui.select|). `:CodeTracer` alone does the
+    same.
+
+:CodeTracer stack-next / stack-previous            *:CodeTracer-stack-next*
+    In a window that shows one of several stacked panes (its |winbar| lists
+    them), show the next / previous one.
+
+:CodeTracer close                                        *:CodeTracer-close*
+    Close the current session and its tab page.
+
+:CodeTracer stop                                          *:CodeTracer-stop*
+    Stop the pane server, closing every session.
+
+==============================================================================
+4. SESSIONS AND LAYOUTS                                    *codetracer-layouts*
+
+Each session is a tab page, built from the layout the server sends for the
+session's current mode: rows and columns of windows in the layout's
+proportions, a pane per window, and a source window where the layout places
+the editor. A stack of panes is one window showing its active pane; its
+|winbar| names the others.
+
+Switching modes re-arranges the tab page to the new mode's layout. Windows
+you opened yourself in the tab page are kept beside the source window.
+
+Your changes go back to the server: resizing a window, or closing a pane's
+window, is recorded in that mode's layout, so leaving the mode and coming back
+restores your arrangement.
+
+Switching tab pages switches the session the server acts on.
+
+==============================================================================
+5. PANES                                                     *codetracer-panes*
+
+A pane buffer (`codetracer://{session}/{pane}`, 'filetype' `codetracer`)
+holds exactly the rows the server painted for its window's size. It is a
+screen, not a document: scrolling, paging and searching are operations the
+server runs, and a resize asks the server for the rows that now fit.
+
+<CR> and a mouse click run what the server attached to the text under the
+cursor — expand this call, go to this event, open this value's history —
+and otherwise what the pane binds to Enter.
+
+==============================================================================
+6. KEY BINDINGS                                               *codetracer-keys*
+
+A pane's bindings come from your CodeTracer keymap (the configuration the
+desktop and terminal front-ends read) and are installed as buffer-local
+mappings, so `:map <buffer>` lists them. In order of precedence:
+
+  1. Your own bindings for the pane: `setup({ mappings = … })`, and
+     buffer-local mappings you create from a `FileType codetracer`
+     autocommand (`b:codetracer_pane` names the pane): >lua
+
+       vim.api.nvim_create_autocmd("FileType", {
+         pattern = "codetracer",
+         callback = function(ev)
+           vim.keymap.set("n", "q", "<Cmd>CodeTracer close<CR>",
+                          { buffer = ev.buf })
+         end,
+       })
+<
+  2. Your CodeTracer keymap.
+  3. CodeTracer's defaults.
+
+The keys you take are reported to the server, so CodeTracer's own keymap help
+shows them as the editor's. `:` and `<C-w>` are always left to Neovim.
+
+==============================================================================
+7. SOURCE BUFFERS                                           *codetracer-source*
+
+The source window follows the debugger: the file it stopped in, the cursor on
+the line, the line marked with a sign and `CodeTracerExecutionLine`. For the
+lines the window shows, the server sends what to draw: the values at the
+execution line and flow values as virtual text, breakpoints and tracepoints in
+the sign column.
+
+==============================================================================
+8. HIGHLIGHT GROUPS                                     *codetracer-highlights*
+
+The server names styles, never colours. Each style `ct.{role}` is the group
+`CodeTracer{Role}` (`ct.value-modified` → `CodeTracerValueModified`), linked
+by default to a standard group (`DiffChange`, `Comment`, `CursorLine`, …), so
+your colour scheme styles it. Override any of them: >lua
+
+  vim.api.nvim_set_hl(0, "CodeTracerValueModified", { fg = "#e5c07b" })
+<
+The plugin's own groups: `CodeTracerExecutionLine`, `CodeTracerExecutionSign`,
+`CodeTracerBreakpointSign`, `CodeTracerBreakpointDisabledSign`,
+`CodeTracerTracepointSign`, `CodeTracerInlineValue`, `CodeTracerFlowValue`,
+`CodeTracerStackTab`, `CodeTracerStackTabActive`.
+
+==============================================================================
+9. DEBUG ADAPTER PROTOCOL                                      *codetracer-dap*
+
+The pane server also speaks DAP, on a loopback port, as a second client of
+the same session: a step from nvim-dap moves the panes too. >lua
+
+  local dap = require("dap")
+  dap.adapters.codetracer = function(callback)
+    callback(require("codetracer").dap_adapter())
+  end
+  dap.configurations.codetracer = {
+    { type = "codetracer", request = "attach", name = "CodeTracer session" },
+  }
+<
+`dap_adapter()` returns nil until the pane server runs.
+
+==============================================================================
+10. HEALTH                                                  *codetracer-health*
+
+`:checkhealth codetracer` checks the Neovim version, finds the pane server,
+and asks it for its protocol version.
+
+ vim:tw=78:ts=8:ft=help:norl:
