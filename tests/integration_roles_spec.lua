@@ -274,6 +274,95 @@ t.case("a file selected in oil.nvim is reported", function()
   vim.api.nvim_win_close(win, true)
 end)
 
+--- Put the plugin directories `var` names (a `:`-separated list, the tree
+--- first and its dependencies after it) on the runtime path; false, with a
+--- NOT RUN failure, when the dev shell did not provide them.
+local function provide(var, what)
+  local dirs = vim.env[var]
+  if dirs == nil or dirs == "" then
+    t.check(false, "NOT RUN: set " .. var .. " to " .. what .. " (the dev shell does)")
+    return false
+  end
+  for _, dir in ipairs(vim.split(dirs, ":", { plain = true, trimempty = true })) do
+    vim.opt.runtimepath:prepend(dir)
+  end
+  return true
+end
+
+--- The window showing a buffer of `filetype`, once one exists.
+local function window_of(filetype)
+  for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    if vim.bo[vim.api.nvim_win_get_buf(w)].filetype == filetype then
+      return w
+    end
+  end
+  return nil
+end
+
+-- Each tree is driven as a user drives it: opened on the recording's
+-- directory through its own command, its cursor put on the file's line from
+-- the main loop. What is checked is what the plugin reads through the tree's
+-- own API (`files.SELECTION`), arriving at the server as `files/selected`.
+t.case("a file selected in nvim-tree is reported", function()
+  if not provide("CODETRACER_TEST_NVIM_TREE", "nvim-tree.lua") then
+    return
+  end
+  require("nvim-tree").setup({ hijack_netrw = false, disable_netrw = false })
+  local file = session.position.file
+  vim.api.nvim_set_current_tabpage(session.tab)
+  local from = #sent
+  require("nvim-tree.api").tree.open({ path = vim.fs.dirname(file) })
+  local win = nil
+  t.wait_for(function()
+    win = window_of("NvimTree")
+    return win ~= nil
+  end, 10000, "nvim-tree's window")
+  if win == nil then
+    return
+  end
+  vim.api.nvim_set_current_win(win)
+  t.wait_for(function()
+    return cursor_on(win, vim.fs.basename(file))
+  end, 10000, "nvim-tree to list the file")
+  t.wait_for(function()
+    return vim.tbl_contains(selections(from), file)
+  end, 5000, "files/selected for " .. file)
+  require("nvim-tree.api").tree.close()
+end)
+
+t.case("a file selected in neo-tree is reported", function()
+  if not provide("CODETRACER_TEST_NEO_TREE", "neo-tree.nvim and its dependencies") then
+    return
+  end
+  require("neo-tree").setup({
+    filesystem = { hijack_netrw_behavior = "disabled" },
+    default_component_configs = { icon = { enabled = false } },
+  })
+  local file = session.position.file
+  vim.api.nvim_set_current_tabpage(session.tab)
+  local from = #sent
+  -- Through neo-tree's command module: `:Neotree` is defined by its plugin/
+  -- file, which a runtime path extended after start-up does not source.
+  local neo_command = require("neo-tree.command")
+  neo_command.execute({ source = "filesystem", position = "left", dir = vim.fs.dirname(file) })
+  local win = nil
+  t.wait_for(function()
+    win = window_of("neo-tree")
+    return win ~= nil
+  end, 10000, "neo-tree's window")
+  if win == nil then
+    return
+  end
+  vim.api.nvim_set_current_win(win)
+  t.wait_for(function()
+    return cursor_on(win, vim.fs.basename(file))
+  end, 10000, "neo-tree to list the file")
+  t.wait_for(function()
+    return vim.tbl_contains(selections(from), file)
+  end, 5000, "files/selected for " .. file)
+  neo_command.execute({ action = "close" })
+end)
+
 t.case("the frame viewer's frames are drawn through the image plugin", function()
   if gfx_trace == nil then
     t.check(false, "NOT RUN: set CODETRACER_CT_GFX_PLAYER_CMD and CODETRACER_TEST_GFX_STREAM to run the image case")

@@ -26,7 +26,12 @@
       ];
 
       perSystem =
-        { pkgs, config, ... }:
+        {
+          pkgs,
+          lib,
+          config,
+          ...
+        }:
         {
           # The mcl-standard-hooks set is installed by the imported git-hooks
           # module. The entries below are this repository's own: `just lint`
@@ -68,6 +73,17 @@
             # The oil.nvim the roles suite selects files in (the file tree
             # role's `files/selected`).
             CODETRACER_TEST_OIL = "${pkgs.vimPlugins.oil-nvim}";
+            # The nvim-tree and neo-tree the roles suite selects files in, each a
+            # `:`-separated list: the tree, then the plugins it requires.
+            CODETRACER_TEST_NVIM_TREE = "${pkgs.vimPlugins.nvim-tree-lua}";
+            CODETRACER_TEST_NEO_TREE = lib.concatStringsSep ":" (
+              with pkgs.vimPlugins;
+              [
+                neo-tree-nvim
+                nui-nvim
+                plenary-nvim
+              ]
+            );
             shellHook = ''
               echo "codetracer.nvim dev shell — $(nvim --version | head -1)"
             ''
