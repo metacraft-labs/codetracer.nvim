@@ -78,7 +78,17 @@ function M.source_buffer(session, file, cb)
     local buf = vim.fn.bufadd(file)
     vim.bo[buf].buflisted = true
     if not vim.api.nvim_buf_is_loaded(buf) then
-      vim.fn.bufload(buf)
+      -- A file open in another Neovim has a swap file, and `bufload` called
+      -- from a callback raises that as E325 even though it loaded the
+      -- buffer. The warning is the user's to see; the source still shows.
+      local ok, err = pcall(vim.fn.bufload, buf)
+      if not vim.api.nvim_buf_is_loaded(buf) then
+        vim.notify(("codetracer: cannot load %s: %s"):format(file, tostring(err)), vim.log.levels.ERROR)
+        return
+      end
+      if not ok then
+        vim.notify(("codetracer: %s: %s"):format(file, tostring(err)), vim.log.levels.WARN)
+      end
     end
     cb(buf)
     return
