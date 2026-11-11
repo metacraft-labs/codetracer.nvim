@@ -11,6 +11,11 @@ local M = {}
 ---@field width integer
 ---@field height integer
 ---@field opened boolean `pane/open` sent and not closed
+---@field want_width integer|nil the size its window has now
+---@field want_height integer|nil
+---@field sent_width integer|nil the size last sent to the server
+---@field sent_height integer|nil
+---@field resizing boolean|nil a `pane/resize` awaits its answer
 ---@field bindings table[] the last `pane/keymap` bindings
 ---@field shadowed_sent string|nil the keys last reported shadowed, joined
 
@@ -27,6 +32,8 @@ local M = {}
 ---@field windows table<integer, table> window → realised leaf info
 ---@field expected_sizes table<integer, {integer, integer}>
 ---@field realising boolean
+---@field reporting_sizes boolean|nil a sizes-only `layout/edited` awaits its answer
+---@field sizes_dirty boolean|nil windows resized while it was pending
 
 M.conn = nil
 M.starting = false

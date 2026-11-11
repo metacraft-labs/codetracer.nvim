@@ -318,6 +318,44 @@ t.case("the user's own binding in a pane wins over CodeTracer's", function()
   t.eq(vim.api.nvim_get_current_buf(), buf, "still in the call trace")
 end)
 
+t.case("dragging a divider paints the size it stops at without queueing the ones between", function()
+  local rpc = require("codetracer.rpc")
+  local win = window_of(first, "calltrace")
+  local p = first.panes.calltrace
+  local h = vim.api.nvim_win_get_height(win)
+  local sent = 0
+  local request = rpc.request
+  rpc.request = function(conn, method, params, cb)
+    if method == "pane/resize" and params.pane == "calltrace" then
+      sent = sent + 1
+    end
+    return request(conn, method, params, cb)
+  end
+  -- One row per main-loop turn, as a drag delivers mouse motions: each turn
+  -- fires `WinResized`, far sooner than the server can repaint.
+  local steps = 10
+  for i = 1, steps do
+    vim.api.nvim_win_set_height(win, h - i)
+    t.sleep(1)
+  end
+  local final = h - steps
+  t.wait_for(function()
+    return p.height == final and vim.api.nvim_buf_line_count(p.buf) == final and not p.resizing
+  end, 15000, "content at the height the drag stopped at")
+  rpc.request = request
+  t.eq(p.height, vim.api.nvim_win_get_height(win), "the pane is painted for the window's final height")
+  -- Sending every size is `steps` requests (9 of 10 measured before
+  -- coalescing); one in flight at a time is the first size and the last (2).
+  t.check(
+    sent > 0 and sent <= steps / 2,
+    ("the sizes between were coalesced: %d requests for %d steps"):format(sent, steps)
+  )
+  vim.api.nvim_win_set_height(win, h)
+  t.wait_for(function()
+    return p.height == h
+  end, 15000, "content at the old height again")
+end)
+
 t.case("a resize survives a round trip through another mode", function()
   vim.api.nvim_set_current_tabpage(first.tab)
   local win = window_of(first, "state")

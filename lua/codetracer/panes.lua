@@ -396,6 +396,29 @@ end
 -- Lifecycle
 -- ---------------------------------------------------------------------------
 
+--- Send the pane's wanted size as `pane/resize`, unless one is already in
+--- flight: dragging a divider resizes the window once per mouse motion, far
+--- faster than the server repaints, and sending every intermediate size
+--- queues repaints the user has already dragged past (a 30-column drag left
+--- the panes ~850 ms behind). With one request in flight, the answer sends
+--- whatever size the window has reached by then, so the pane trails the
+--- divider by at most one repaint.
+local function send_resize(session, pane)
+  if pane.resizing or not pane.opened then
+    return
+  end
+  local w, h = pane.want_width, pane.want_height
+  if pane.sent_width == w and pane.sent_height == h then
+    return
+  end
+  pane.resizing = true
+  pane.sent_width, pane.sent_height = w, h
+  rpc.request(state.conn, "pane/resize", { session = session.id, pane = pane.name, width = w, height = h }, function()
+    pane.resizing = false
+    send_resize(session, pane)
+  end)
+end
+
 --- Tell the server the pane is shown at `win`'s size (`pane/open` the first
 --- time, `pane/resize` after) — the size its viewport becomes.
 function M.report_size(session, pane, win)
@@ -403,18 +426,21 @@ function M.report_size(session, pane, win)
   if w <= 0 or h <= 0 then
     return
   end
-  if pane.opened and pane.width == w and pane.height == h then
+  pane.want_width, pane.want_height = w, h
+  if pane.opened then
+    send_resize(session, pane)
     return
   end
-  local method = pane.opened and "pane/resize" or "pane/open"
   pane.opened = true
   pane.width, pane.height = w, h
-  rpc.request(state.conn, method, { session = session.id, pane = pane.name, width = w, height = h })
+  pane.sent_width, pane.sent_height = w, h
+  rpc.request(state.conn, "pane/open", { session = session.id, pane = pane.name, width = w, height = h })
 end
 
 function M.close(session, pane)
   if pane.opened then
     pane.opened = false
+    pane.sent_width, pane.sent_height = nil, nil
     rpc.request(state.conn, "pane/close", { session = session.id, pane = pane.name })
   end
 end

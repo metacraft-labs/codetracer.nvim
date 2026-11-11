@@ -404,10 +404,28 @@ function M.check_sizes(session)
     return
   end
   remember_sizes(session)
-  M.report_edit(session, measured_weights(session.realised, {}), {})
+  M.report_resized(session)
 end
 
-function M.report_edit(session, sizes, closed)
+--- Report the windows' sizes as `layout/edited`, at most one request in
+--- flight (see `panes.report_size`: a drag resizes once per mouse motion).
+--- The weights are measured when the request is sent, so the one sent after
+--- an answer carries every resize made while it was pending.
+function M.report_resized(session)
+  if session.reporting_sizes then
+    session.sizes_dirty = true
+    return
+  end
+  session.reporting_sizes, session.sizes_dirty = true, false
+  M.report_edit(session, measured_weights(session.realised, {}), {}, function()
+    session.reporting_sizes = false
+    if session.sizes_dirty and session.realised and not session.realising then
+      M.report_resized(session)
+    end
+  end)
+end
+
+function M.report_edit(session, sizes, closed, on_done)
   rpc.request(state.conn, "layout/edited", {
     session = session.id,
     mode = session.mode,
@@ -416,6 +434,9 @@ function M.report_edit(session, sizes, closed)
   }, function(err, result)
     if not err and result and result.layout then
       session.layout = result.layout
+    end
+    if on_done then
+      on_done()
     end
   end)
 end
