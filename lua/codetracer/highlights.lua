@@ -155,8 +155,11 @@ function M.setup()
     CodeTracerTracepointSign = { link = "DiagnosticInfo", default = true },
     CodeTracerInlineValue = { link = "DiagnosticVirtualTextHint", default = true },
     CodeTracerFlowValue = { link = "Comment", default = true },
-    CodeTracerStackTab = { link = "TabLine", default = true },
-    CodeTracerStackTabActive = { link = "TabLineSel", default = true },
+    -- In a winbar `TabLineSel` takes the bar's colours and differs from
+    -- `TabLine`'s filled cell only by bold, so the INACTIVE tab looked
+    -- selected. The active tab is the selected item; the others sit in the bar.
+    CodeTracerStackTab = { link = "WinBarNC", default = true },
+    CodeTracerStackTabActive = { link = "PmenuSel", default = true },
     CodeTracerBold = { bold = true, default = true },
     CodeTracerItalic = { italic = true, default = true },
     CodeTracerUnderline = { underline = true, default = true },

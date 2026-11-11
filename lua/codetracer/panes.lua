@@ -15,7 +15,15 @@ local M = {}
 --- server's keymap help shows them as the editor's.
 M.RESERVED = { ":", "<C-w>" }
 
+--- A pane buffer's name. Short on purpose: it is what the status line shows,
+--- and pane windows are narrow, so a long scheme leaves no room for the pane.
 local function buf_name(session, pane)
+  return ("ct://%d/%s"):format(session.id, pane.name)
+end
+
+--- The name a pane buffer had before the scheme was shortened, which a
+--- session file written then (`:mksession`) still restores.
+local function legacy_buf_name(session, pane)
   return ("codetracer://%d/%s"):format(session.id, pane.name)
 end
 
@@ -27,17 +35,32 @@ function M.ensure_buf(session, pane)
   -- A buffer of that name already exists when a session file (`:mksession`)
   -- restored the windows a pane was in: it is taken over, not duplicated.
   local name = buf_name(session, pane)
+  local legacy = legacy_buf_name(session, pane)
   local buf = nil
   for _, b in ipairs(vim.api.nvim_list_bufs()) do
-    if vim.api.nvim_buf_get_name(b) == name then
+    local bname = vim.api.nvim_buf_get_name(b)
+    if bname == name or bname == legacy then
       buf = b
     end
   end
   if buf == nil then
     buf = vim.api.nvim_create_buf(false, true)
-    vim.api.nvim_buf_set_name(buf, name)
   end
   vim.bo[buf].buftype = "nofile"
+  local old = vim.api.nvim_buf_get_name(buf)
+  if old ~= name then
+    vim.api.nvim_buf_set_name(buf, name)
+    -- A rename keeps the old name as an unlisted alternate-file buffer (even
+    -- for a 'nofile' one), which a later look-up by name would take for the
+    -- pane's: it goes.
+    if old ~= "" then
+      for _, b in ipairs(vim.api.nvim_list_bufs()) do
+        if b ~= buf and vim.api.nvim_buf_get_name(b) == old then
+          vim.api.nvim_buf_delete(b, { force = true })
+        end
+      end
+    end
+  end
   vim.bo[buf].bufhidden = "hide"
   vim.bo[buf].swapfile = false
   vim.bo[buf].modifiable = false

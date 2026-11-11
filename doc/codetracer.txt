@@ -85,7 +85,8 @@ The plugin works without calling `setup`; call it to change the defaults: >lua
 
 :CodeTracer stack-next / stack-previous            *:CodeTracer-stack-next*
     In a window that shows one of several stacked panes (its |winbar| lists
-    them), show the next / previous one.
+    them), show the next / previous one. Clicking a pane's name in the
+    |winbar| shows that pane.
 
 :CodeTracer frames                                      *:CodeTracer-frames*
     Show or hide the frame viewer, for a recording that carries graphics
@@ -123,7 +124,7 @@ Switching tab pages switches the session the server acts on.
 ==============================================================================
 5. PANES                                                     *codetracer-panes*
 
-A pane buffer (`codetracer://{session}/{pane}`, 'filetype' `codetracer`)
+A pane buffer (`ct://{session}/{pane}`, 'filetype' `codetracer`)
 holds exactly the rows the server painted for its window's size. It is a
 screen, not a document: scrolling, paging and searching are operations the
 server runs, and a resize asks the server for the rows that now fit.

@@ -76,12 +76,14 @@ local function shown_pane(node)
 end
 M.shown_pane = shown_pane
 
+--- The stack's tab strip: one label per child, each a click region
+--- (`%{index}@…@ … %X`, see |statusline|) whose handler shows that child.
 local function stack_winbar(node)
   local parts = {}
   for i, child in ipairs(node.children) do
     local name = child.kind == "pane" and child.pane or child.kind
     local group = i == node.active and "CodeTracerStackTabActive" or "CodeTracerStackTab"
-    parts[#parts + 1] = ("%%#%s# %s %%*"):format(group, name)
+    parts[#parts + 1] = ("%%%d@v:lua.CodeTracerStackTabClick@%%#%s# %s %%*%%X"):format(i, group, name)
   end
   return table.concat(parts, "")
 end
@@ -440,9 +442,21 @@ function M.stack_next(session, win, delta)
   if info == nil or info.node.kind ~= "stack" then
     return
   end
+  M.stack_select(session, win, (info.node.active - 1 + (delta or 1)) % #info.node.children + 1)
+end
+
+--- Show child `index` of the stack window `win` shows.
+function M.stack_select(session, win, index)
+  local info = session.windows[win]
+  if info == nil or info.node.kind ~= "stack" then
+    return
+  end
   local node = info.node
+  if index < 1 or index > #node.children or index == node.active then
+    return
+  end
   local before = shown_pane(node)
-  node.active = (node.active - 1 + (delta or 1)) % #node.children + 1
+  node.active = index
   panes.close(session, state.pane(session, before))
   session.realising = true
   show_leaf(session, node, win, info.parent)
@@ -457,6 +471,22 @@ end
 --- `sizes`).
 function M.measured(tree)
   return measured_weights(tree, {})
+end
+
+--- The stack tab strip's click handler (`stack_winbar`). A |statusline|
+--- click region can only name a global function; `minwid` is the index of
+--- the tab clicked, and the window is the one under the mouse.
+function _G.CodeTracerStackTabClick(minwid, _, button)
+  if button ~= "l" then
+    return
+  end
+  local win = vim.fn.getmousepos().winid
+  for _, s in pairs(state.sessions) do
+    if s.windows and s.windows[win] then
+      M.stack_select(s, win, minwid)
+      return
+    end
+  end
 end
 
 return M

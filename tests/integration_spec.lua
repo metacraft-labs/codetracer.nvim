@@ -241,6 +241,60 @@ t.case("resizing a pane's window changes the window the server paints", function
   end, 15000, "content at the old height again")
 end)
 
+t.case("clicking a stacked pane's name in the winbar shows that pane", function()
+  -- A window that shows one of several stacked panes, and a tab other than
+  -- the shown one.
+  local win, node
+  for w, info in pairs(first.windows) do
+    if info.node.kind == "stack" and #info.node.children > 1 and vim.api.nvim_win_is_valid(w) then
+      win, node = w, info.node
+    end
+  end
+  t.check(win ~= nil, "the debug layout has a stack")
+  if win == nil then
+    return
+  end
+  local shown_before = layout.shown_pane(node)
+  local target = node.active % #node.children + 1
+  local target_pane = layout.shown_pane(node.children[target])
+  t.check(
+    vim.wo[win].winbar:find("CodeTracerStackTabActive# " .. shown_before .. " ", 1, true) ~= nil,
+    "the winbar marks the shown pane active"
+  )
+  -- A real mouse click on the target's label: the winbar is the window's
+  -- first screen row, and each label is ` name ` in order.
+  local col = 0
+  for i = 1, target - 1 do
+    col = col + #layout.shown_pane(node.children[i]) + 2
+  end
+  local pos = vim.api.nvim_win_get_position(win)
+  vim.api.nvim_input_mouse("left", "press", "", 0, pos[1], pos[2] + col + 1)
+  vim.api.nvim_input_mouse("left", "release", "", 0, pos[1], pos[2] + col + 1)
+  t.wait_for(function()
+    return node.active == target
+  end, 5000, "the clicked tab to become active")
+  t.eq(
+    vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(win)),
+    ("ct://%d/%s"):format(first.id, target_pane),
+    "the window shows the clicked pane's buffer"
+  )
+  t.check(
+    vim.wo[win].winbar:find("CodeTracerStackTabActive# " .. target_pane .. " ", 1, true) ~= nil,
+    "the winbar marks the clicked pane active"
+  )
+  local p = first.panes[target_pane]
+  t.wait_for(function()
+    return p.opened and vim.api.nvim_buf_line_count(p.buf) == vim.api.nvim_win_get_height(win)
+  end, 15000, "the clicked pane's content")
+  -- And back, so the cases after this one see the layout they expect.
+  for i, c in ipairs(node.children) do
+    if layout.shown_pane(c) == shown_before then
+      layout.stack_select(first, win, i)
+    end
+  end
+  t.eq(layout.shown_pane(node), shown_before, "the original pane is shown again")
+end)
+
 t.case("the user's own binding in a pane wins over CodeTracer's", function()
   local buf = first.panes.calltrace.buf
   vim.api.nvim_set_current_win(window_of(first, "calltrace"))
@@ -289,7 +343,19 @@ t.case("a resize survives a round trip through another mode", function()
 end)
 
 t.case("switching sessions shows the other session's layout", function()
+  -- A buffer named the way pane buffers were before `ct://`, as a session
+  -- file written then restores it: the second session's call trace adopts it
+  -- under the new name rather than leaving it behind.
+  local legacy = vim.api.nvim_create_buf(true, false)
+  vim.api.nvim_buf_set_name(legacy, ("codetracer://%d/calltrace"):format(first.id + 1))
   local second = open_session()
+  t.eq(second.panes.calltrace.buf, legacy, "the restored legacy buffer is the call trace's")
+  t.eq(vim.api.nvim_buf_get_name(legacy), ("ct://%d/calltrace"):format(second.id), "renamed to ct://")
+  local old_name = ("codetracer://%d/calltrace"):format(second.id)
+  t.check(
+    not vim.tbl_contains(vim.tbl_map(vim.api.nvim_buf_get_name, vim.api.nvim_list_bufs()), old_name),
+    "no buffer, listed or not, keeps the old name"
+  )
   t.check(second ~= nil and second.id ~= first.id, "a second session")
   t.check(second.tab ~= first.tab, "in its own tab page")
   t.check(toggle_mode(second), "the second session to edit mode")

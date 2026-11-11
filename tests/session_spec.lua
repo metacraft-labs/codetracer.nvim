@@ -104,7 +104,7 @@ else
     if win then
       t.eq(vim.api.nvim_win_get_width(win), expect.state_width, "at the width the session kept")
       t.eq(vim.api.nvim_buf_line_count(s.panes.state.buf), vim.api.nvim_win_get_height(win), "painted for its window")
-      t.check(vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(win)):match("^codetracer://") ~= nil, "a pane buffer")
+      t.check(vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(win)):match("^ct://") ~= nil, "a pane buffer")
     end
     -- The user's own window is still there, beside the panes.
     local own = false
