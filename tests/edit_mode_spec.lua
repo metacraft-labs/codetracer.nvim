@@ -67,6 +67,7 @@ vim.fn.writefile({
 vim.env.TEST_CERTIFICATES_DIR = vim.fn.tempname()
 vim.cmd.cd(project)
 
+vim.cmd("runtime plugin/codetracer.lua")
 local ct = require("codetracer")
 ct.setup({ cmd = { server, "--pane-server" } })
 local state = require("codetracer.state")
@@ -160,6 +161,103 @@ t.case("a test recorded from Test Results opens in a tab page of its own", funct
     end, 60000, "the recording's position"),
     "positioned"
   )
+end)
+
+--- Sessions other than `first`, by id.
+local function others()
+  local out = {}
+  for id in pairs(state.sessions) do
+    if id ~= first.id then
+      out[id] = true
+    end
+  end
+  return out
+end
+
+--- Wait for a session that is not in `known` to open in its own tab page.
+local function new_session(known, what)
+  local found
+  t.wait_for(function()
+    for id, s in pairs(state.sessions) do
+      if id ~= first.id and not known[id] and s.tab then
+        found = s
+        return true
+      end
+    end
+    return false
+  end, 240000, what)
+  return found
+end
+
+t.case("the source's tests are signs on their lines; the sign and the command record them", function()
+  vim.api.nvim_set_current_tabpage(first.tab)
+  vim.api.nvim_set_current_win(first.editor_win)
+  vim.cmd.edit(project .. "/src/main.nr")
+  local buf = vim.api.nvim_get_current_buf()
+  local tests = require("codetracer.tests")
+  local marks
+  t.wait_for(function()
+    marks = vim.api.nvim_buf_get_extmarks(buf, tests.namespace, 0, -1, { details = true })
+    return #marks == 2
+  end, 30000, "the two tests' signs")
+  local lines = {}
+  for _, m in ipairs(marks or {}) do
+    lines[#lines + 1] = m[2] + 1
+    t.check(m[4].sign_text ~= nil, "a sign on line " .. (m[2] + 1))
+  end
+  table.sort(lines)
+  t.eq(lines, { 5, 10 }, "on each test's line (its #[test])")
+  local press = vim.api.nvim_buf_call(buf, function()
+    return vim.fn.maparg("<LeftMouse>", "n", false, true)
+  end)
+  t.check(press.buffer == 1, "a press in the sign column is CodeTracer's: " .. vim.inspect(press))
+  -- The source window follows the debugger's position, so the file is read
+  -- in a window of the user's own, as one browses a project: a real press
+  -- there on test_fails' sign (line 10, the window's first cells).
+  vim.cmd("vsplit")
+  local mine = vim.api.nvim_get_current_win()
+  vim.api.nvim_win_set_buf(mine, buf)
+  vim.api.nvim_win_set_cursor(mine, { 1, 0 })
+  vim.cmd("redraw")
+  local known = others()
+  local winpos = vim.api.nvim_win_get_position(mine)
+  vim.api.nvim_input_mouse("left", "press", "", 0, winpos[1] + 9, winpos[2])
+  vim.api.nvim_input_mouse("left", "release", "", 0, winpos[1] + 9, winpos[2])
+  local clicked = new_session(known, "the clicked test's recording")
+  t.check(clicked ~= nil, "a click on the sign recorded the test")
+  -- The command, from the cursor inside test_passes' body.
+  vim.api.nvim_set_current_tabpage(first.tab)
+  vim.api.nvim_set_current_win(mine)
+  vim.api.nvim_win_set_cursor(mine, { 7, 4 })
+  known = others()
+  vim.cmd("CodeTracer test-at-cursor")
+  t.check(new_session(known, "the command's recording") ~= nil, ":CodeTracer test-at-cursor recorded the test")
+end)
+
+t.case("the neotest strategy records a test CodeTracer knows", function()
+  local paths = vim.env.CODETRACER_TEST_NEOTEST
+  t.check(paths ~= nil, "$CODETRACER_TEST_NEOTEST (the dev shell sets it)")
+  if paths == nil then
+    return
+  end
+  for _, p in ipairs(vim.split(paths, ":", { trimempty = true })) do
+    vim.opt.runtimepath:append(p)
+  end
+  local nio = require("nio")
+  local known = others()
+  local code
+  nio.run(function()
+    -- What neotest hands a strategy for test_passes (rows are 0-based).
+    local proc = require("codetracer.neotest").strategy({ command = { "nargo", "test", "test_passes" } }, {
+      position = { path = project .. "/src/main.nr", name = "test_passes", range = { 5, 0, 7, 1 } },
+    })
+    code = proc.result()
+  end)
+  t.check(new_session(known, "the strategy's recording") ~= nil, "recorded through CodeTracer")
+  t.wait_for(function()
+    return code ~= nil
+  end, 10000, "the process to complete")
+  t.eq(code, 0, "the process succeeded")
 end)
 
 t.case("the server stops cleanly", function()

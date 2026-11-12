@@ -16,6 +16,7 @@ local files = require("codetracer.files")
 local persist = require("codetracer.persist")
 local controls = require("codetracer.controls")
 local source_keys = require("codetracer.source_keys")
+local tests = require("codetracer.tests")
 
 local M = {}
 
@@ -49,6 +50,10 @@ M.defaults = {
   --- your CodeTracer keymap) in the session's source buffer while its tab
   --- page is current; your own mappings win (`:help codetracer-keys`).
   source_keys = true,
+  --- Where a test's control goes in the source (`:help codetracer-tests`):
+  --- `"gutter"` (a sign, click to record), `"above-line"` (a virtual line
+  --- above the test) or `"both"`.
+  tests_placement = "gutter",
 }
 
 --- The debugger operations offered as `<Plug>(codetracer-…)` mappings.
@@ -127,6 +132,10 @@ local function on_notification(method, params)
   elseif method == "controls/state" then
     if session then
       controls.apply(session, params)
+    end
+  elseif method == "source/tests" then
+    if session then
+      tests.apply(session, params)
     end
   end
   vim.api.nvim_exec_autocmds(
@@ -430,6 +439,9 @@ local SUBCOMMANDS = {
       images.toggle_frames(s)
     end
   end,
+  ["test-at-cursor"] = function()
+    tests.at_cursor()
+  end,
   sources = function()
     local s = state.current_session()
     if s then
@@ -488,6 +500,14 @@ function M.setup(opts)
   vim.api.nvim_create_autocmd("ColorScheme", { group = group, callback = hl.setup })
   -- The source buffer's debugger keys follow the tab page and its source
   -- window (`source_keys.sync`).
+  -- A source buffer shown: its tests (`source/tests`), if a session holds
+  -- them.
+  vim.api.nvim_create_autocmd("BufWinEnter", {
+    group = group,
+    callback = function(ev)
+      tests.on_buf(ev.buf)
+    end,
+  })
   vim.api.nvim_create_autocmd({ "TabEnter", "TabLeave", "BufWinEnter", "WinEnter" }, {
     group = group,
     callback = function()

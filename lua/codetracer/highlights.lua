@@ -163,6 +163,10 @@ function M.setup()
     -- The debugger controls in the tab line (`controls.lua`).
     CodeTracerControl = { link = "TabLine", default = true },
     CodeTracerControlDisabled = { link = "Comment", default = true },
+    -- A test's sign in the source (`tests.lua`), by its last verdict.
+    CodeTracerTestSign = { link = "DiagnosticInfo", default = true },
+    CodeTracerTestPassed = { link = "DiagnosticOk", default = true },
+    CodeTracerTestFailed = { link = "DiagnosticError", default = true },
     CodeTracerBold = { bold = true, default = true },
     CodeTracerItalic = { italic = true, default = true },
     CodeTracerUnderline = { underline = true, default = true },

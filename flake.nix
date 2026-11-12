@@ -84,6 +84,16 @@
                 plenary-nvim
               ]
             );
+            # The neotest the edit-mode suite drives the CodeTracer strategy
+            # through: neotest, then the plugins it requires.
+            CODETRACER_TEST_NEOTEST = lib.concatStringsSep ":" (
+              with pkgs.vimPlugins;
+              [
+                neotest
+                nvim-nio
+                plenary-nvim
+              ]
+            );
             shellHook = ''
               echo "codetracer.nvim dev shell — $(nvim --version | head -1)"
             ''
