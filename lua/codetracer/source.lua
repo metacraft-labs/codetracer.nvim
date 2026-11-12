@@ -82,8 +82,9 @@ end
 
 --- Report where the cursor is in the source window (`source/cursor`): the
 --- line an operation "at the cursor" — a breakpoint, a tracepoint — acts on.
-function M.report_cursor(session)
-  local win = editor_win(session)
+--- `at`: another window of the user's showing a file (`menu.lua`).
+function M.report_cursor(session, at)
+  local win = at or editor_win(session)
   if win == nil then
     return
   end

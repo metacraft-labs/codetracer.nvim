@@ -501,6 +501,13 @@ function M.setup(opts)
   vim.api.nvim_create_autocmd("ColorScheme", { group = group, callback = hl.setup })
   -- The source buffer's debugger keys follow the tab page and its source
   -- window (`source_keys.sync`).
+  -- Nim's compile-time tracing in the right-click menu (`menu.lua`).
+  vim.api.nvim_create_autocmd("MenuPopup", {
+    group = group,
+    callback = function()
+      require("codetracer.menu").on_popup()
+    end,
+  })
   -- A source buffer shown: its tests (`source/tests`), if a session holds
   -- them.
   vim.api.nvim_create_autocmd("BufWinEnter", {

@@ -173,6 +173,22 @@ A test CodeTracer knows is recorded as the Test Results pane records it;
 any other is the adapter's command recorded with `ct record`, whose
 recording then opens.
 
+                                                            *codetracer-nim*
+In a Nim project, CodeTracer traces what the compiler runs: a macro's
+expansion, a `static:` block, a constant's evaluation, a NimScript run
+(`nim e`). Right-click on the construct in a Nim file: the CodeTracer
+submenu of the |popup-menu| traces it, and the recording opens in a tab page
+of its own. The same operations are commands, at the cursor: >vim
+
+  :CodeTracer trace-macro-at-cursor
+  :CodeTracer trace-static-block-at-cursor
+  :CodeTracer trace-constant-at-cursor
+  :CodeTracer trace-eval
+<
+The trace reads the saved file. It needs codetracer-nim's trace-enabled
+nimsuggest (`$CODETRACER_NIMSUGGEST`) and compiler (`nim`), as CodeTracer's
+terminal does; without them the command says what is missing.
+
 ==============================================================================
 5. PANES                                                     *codetracer-panes*
 
