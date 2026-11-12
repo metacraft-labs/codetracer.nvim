@@ -260,6 +260,30 @@ t.case("the neotest strategy records a test CodeTracer knows", function()
   t.eq(code, 0, "the process succeeded")
 end)
 
+t.case("a test recorded 'here' takes the place of the session it was started from", function()
+  vim.api.nvim_set_current_tabpage(first.tab)
+  local buf = vim.fn.bufnr(project .. "/src/main.nr")
+  local win = vim.fn.bufwinid(buf)
+  t.check(win ~= -1, "main.nr is shown in the first session's tab page")
+  if win == -1 then
+    return
+  end
+  vim.api.nvim_set_current_win(win)
+  vim.api.nvim_win_set_cursor(win, { 11, 4 })
+  local known = others()
+  local replaced = first.id
+  vim.cmd("CodeTracer test-at-cursor here")
+  local opened = new_session(known, "the recording that replaces the session")
+  t.check(opened ~= nil, "a session opened")
+  t.check(
+    t.wait_for(function()
+      return state.sessions[replaced] == nil
+    end, 15000, "the replaced session to close"),
+    "the session it was started from is closed"
+  )
+  t.eq(opened and opened.title, "test_fails", "named by the test")
+end)
+
 t.case("the server stops cleanly", function()
   local done = false
   ct.stop(function()

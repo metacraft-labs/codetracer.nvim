@@ -52,10 +52,13 @@ local function session_of_buf(buf)
   end
 end
 
---- Record the test `control` names and open its recording.
-function M.record(session, control)
+--- Record the test `control` names and open its recording — in a new tab
+--- page, or, with `here`, in place of the current session (the Test Results
+--- pane's Ctrl on the press: the destination inverted).
+function M.record(session, control, here)
   if not (control.open and control.open.enabled == false) then
-    require("codetracer.panes").run(session, "testResults", "tests.open-test", { args = { path = control.testId } })
+    local args = { path = control.testId, text = here and "redirect" or nil }
+    require("codetracer.panes").run(session, "testResults", "tests.open-test", { args = args })
   else
     vim.notify("codetracer: " .. (control.open.title or "this test cannot be recorded now"), vim.log.levels.WARN)
   end
@@ -72,39 +75,44 @@ end
 
 local function unmap_click(buf)
   if clicking[buf] then
-    pcall(vim.keymap.del, "n", "<LeftMouse>", { buffer = buf })
+    for _, lhs in ipairs(clicking[buf]) do
+      pcall(vim.keymap.del, "n", lhs, { buffer = buf })
+    end
     clicking[buf] = nil
   end
 end
 
---- The sign-column click in `buf`: a press on a test's sign records it;
---- any other press is Neovim's own.
+--- The sign-column click in `buf`: a press on a test's sign records it
+--- (Ctrl+click: in place of the current session); any other press is
+--- Neovim's own. A press the user maps themselves is left theirs.
 local function map_click(buf)
   if clicking[buf] then
     return
   end
-  local theirs = vim.fn.maparg("<LeftMouse>", "n", false, true)
-  if not vim.tbl_isempty(theirs) then
-    return
-  end
-  vim.keymap.set("n", "<LeftMouse>", function()
-    local pos = vim.fn.getmousepos()
-    if pos.winid ~= 0 and vim.api.nvim_win_get_buf(pos.winid) == buf then
-      local info = vim.fn.getwininfo(pos.winid)[1]
-      if pos.wincol <= info.textoff then
-        local session = session_of_buf(buf)
-        local control = session and control_on(session, buf, pos.line)
-        if control then
-          vim.schedule(function()
-            M.record(session, control)
-          end)
-          return "<Ignore>"
+  local mapped = {}
+  for lhs, here in pairs({ ["<LeftMouse>"] = false, ["<C-LeftMouse>"] = true }) do
+    if vim.tbl_isempty(vim.fn.maparg(lhs, "n", false, true)) then
+      vim.keymap.set("n", lhs, function()
+        local pos = vim.fn.getmousepos()
+        if pos.winid ~= 0 and vim.api.nvim_win_get_buf(pos.winid) == buf then
+          local info = vim.fn.getwininfo(pos.winid)[1]
+          if pos.wincol <= info.textoff then
+            local session = session_of_buf(buf)
+            local control = session and control_on(session, buf, pos.line)
+            if control then
+              vim.schedule(function()
+                M.record(session, control, here)
+              end)
+              return "<Ignore>"
+            end
+          end
         end
-      end
+        return lhs
+      end, { buffer = buf, expr = true, desc = "codetracer: record the test on this line" })
+      mapped[#mapped + 1] = lhs
     end
-    return "<LeftMouse>"
-  end, { buffer = buf, expr = true, desc = "codetracer: record the test on this line" })
-  clicking[buf] = true
+  end
+  clicking[buf] = mapped
 end
 
 --- Draw `session`'s tests in `buf`: a sign per test, the click.
@@ -160,9 +168,10 @@ function M.on_buf(buf)
   end
 end
 
---- `:CodeTracer test-at-cursor`: the test the cursor is in — the last test
---- whose line is at or above the cursor.
-function M.at_cursor()
+--- `:CodeTracer test-at-cursor [here]`: the test the cursor is in — the
+--- last test whose line is at or above the cursor; `here` opens its
+--- recording in place of the current session.
+function M.at_cursor(here)
   local buf = vim.api.nvim_get_current_buf()
   local session = session_of_buf(buf)
   local line = vim.api.nvim_win_get_cursor(0)[1]
@@ -176,7 +185,7 @@ function M.at_cursor()
     vim.notify("codetracer: no test of CodeTracer's at the cursor", vim.log.levels.WARN)
     return
   end
-  M.record(session, best)
+  M.record(session, best, here)
 end
 
 return M

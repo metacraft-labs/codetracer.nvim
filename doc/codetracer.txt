@@ -158,9 +158,10 @@ is no longer listed) is refused, and the reason is shown with
                                                           *codetracer-tests*
 A source file's tests — the ones CodeTracer's Test Results pane lists — are
 signs on their lines: `▶`, or the last verdict (`✓`, `✗`). Click a sign to
-record the test; its recording opens in a tab page of its own.
-`:CodeTracer test-at-cursor` records the test the cursor is in (bind it to a
-key). `tests_placement = "above-line"` (or `"both"`) puts a line reading
+record the test; its recording opens in a tab page of its own (Ctrl+click:
+in place of the current session). `:CodeTracer test-at-cursor` records the
+test the cursor is in (bind it to a key); `:CodeTracer test-at-cursor here`
+opens it in place of the current session. `tests_placement = "above-line"` (or `"both"`) puts a line reading
 `▶ Record <test>` above each test instead of (or as well as) the sign.
 
 With neotest (https://github.com/nvim-neotest/neotest), record the test

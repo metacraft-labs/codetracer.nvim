@@ -217,6 +217,7 @@ function M.new_session(trace, result)
     expected_sizes = {},
     realising = false,
     graphics = result.graphics,
+    title = result.title,
   }
   state.sessions[session.id] = session
   M.operations(function() end)
@@ -439,8 +440,8 @@ local SUBCOMMANDS = {
       images.toggle_frames(s)
     end
   end,
-  ["test-at-cursor"] = function()
-    tests.at_cursor()
+  ["test-at-cursor"] = function(args)
+    tests.at_cursor(args[1] == "here")
   end,
   sources = function()
     local s = state.current_session()
