@@ -1,0 +1,178 @@
+--- Edit-mode services through the plugin (Editor-Hosted-Front-Ends §E9): a
+--- test recorded from CodeTracer's Test Results pane opens its recording as
+--- a session of its own, in a tab page of its own (`session/opened`), and an
+--- operation the session refuses says why.
+---
+--- Nothing is mocked. The server is `codetracer-tui --pane-server`
+--- ($CODETRACER_TUI) over CodeTracer's `calc` recording
+--- ($CODETRACER_TEST_TRACE); the project is the two-test Noir crate
+--- CodeTracer's own Test Results suites run (`plat53_noir_project.nim`, byte
+--- for byte), written to a temporary directory that Neovim starts the server
+--- in — the server's Edit-mode project is the directory it starts in, as
+--- `ct replay`'s is. Recording the test runs the real `ct record-test`, which
+--- needs `ct` (`$CT_BIN`, or on `PATH`) and `nargo` on `PATH`.
+---
+--- Run: just test-integration-edit (see the Justfile for the variables).
+local root = vim.fn.getcwd()
+vim.opt.runtimepath:prepend(root)
+package.path = root .. "/tests/?.lua;" .. package.path
+vim.o.columns = 200
+vim.o.lines = 60
+
+local t = require("harness")
+
+local server = vim.env.CODETRACER_TUI
+local trace = vim.env.CODETRACER_TEST_TRACE
+local ct_bin = vim.env.CT_BIN ~= nil and vim.env.CT_BIN or vim.fn.exepath("ct")
+local missing = {}
+if server == nil or vim.fn.executable(server) ~= 1 then
+  missing[#missing + 1] = "$CODETRACER_TUI"
+end
+if trace == nil or vim.fn.isdirectory(trace) ~= 1 then
+  missing[#missing + 1] = "$CODETRACER_TEST_TRACE"
+end
+if ct_bin == "" or vim.fn.executable(ct_bin) ~= 1 then
+  missing[#missing + 1] = "ct ($CT_BIN or PATH)"
+end
+if vim.fn.executable("nargo") ~= 1 then
+  missing[#missing + 1] = "nargo (PATH)"
+end
+if #missing > 0 then
+  io.stdout:write("the edit-mode suite needs " .. table.concat(missing, ", ") .. "\n")
+  vim.cmd("cquit 2")
+end
+
+-- The crate, and the server started in it.
+local project = vim.fn.tempname()
+vim.fn.mkdir(project .. "/src", "p")
+vim.fn.writefile(
+  { "[package]", 'name = "plat53_suite"', 'type = "bin"', 'authors = [""]', "", "[dependencies]" },
+  project .. "/Nargo.toml"
+)
+vim.fn.writefile({
+  "fn main(x: Field, y: pub Field) {",
+  "    assert(x != y);",
+  "}",
+  "",
+  "#[test]",
+  "fn test_passes() {",
+  "    main(1, 2);",
+  "}",
+  "",
+  "#[test]",
+  "fn test_fails() {",
+  "    main(1, 1);",
+  "}",
+}, project .. "/src/main.nr")
+vim.env.TEST_CERTIFICATES_DIR = vim.fn.tempname()
+vim.cmd.cd(project)
+
+local ct = require("codetracer")
+ct.setup({ cmd = { server, "--pane-server" } })
+local state = require("codetracer.state")
+local layout = require("codetracer.layout")
+local panes = require("codetracer.panes")
+
+local first
+
+t.case("a session opens on the recording, in the crate's directory", function()
+  ct.open(trace, function(x)
+    first = x
+  end)
+  t.check(
+    t.wait_for(function()
+      return first and first.position ~= nil
+    end, 60000, "the session"),
+    "opened"
+  )
+end)
+
+t.case("an operation the session refuses says why", function()
+  local said
+  local notify = vim.notify
+  vim.notify = function(msg, level)
+    said = { msg = msg, level = level }
+  end
+  panes.run(first, "testResults", "tests.open-test", { args = { path = "no-such-test" } })
+  t.wait_for(function()
+    return said ~= nil
+  end, 15000, "the refusal")
+  vim.notify = notify
+  t.check(
+    said and said.level == vim.log.levels.WARN and said.msg:find("tests.open-test", 1, true) ~= nil,
+    "refused with its reason: " .. vim.inspect(said)
+  )
+end)
+
+t.case("a test recorded from Test Results opens in a tab page of its own", function()
+  -- Show the Test Results pane: a tab of the stack it is placed in.
+  local shown = false
+  for win, info in pairs(first.windows) do
+    if info.node and info.node.kind == "stack" then
+      for i, child in ipairs(info.node.children) do
+        if child.pane == "testResults" then
+          layout.stack_select(first, win, i)
+          shown = true
+        end
+      end
+    end
+  end
+  t.check(shown, "the layout places the Test Results pane in a stack")
+  local p = state.pane(first, "testResults")
+  local spot
+  t.wait_for(function()
+    for _, row in pairs(p.rows or {}) do
+      if (row.text or ""):find("test_fails", 1, true) then
+        for _, h in ipairs(row.hotspots or {}) do
+          if h.operation == "tests.open-test" then
+            spot = h
+            return true
+          end
+        end
+      end
+    end
+    return false
+  end, 60000, "the failing test's ⏵ in Test Results")
+  if spot == nil then
+    return
+  end
+  local tabs = #vim.api.nvim_list_tabpages()
+  -- What a click on the ⏵ sends (`panes.activate`).
+  panes.run(first, "testResults", spot.operation, { args = spot.args })
+  local opened
+  t.wait_for(function()
+    for id, s in pairs(state.sessions) do
+      if id ~= first.id then
+        opened = s
+      end
+    end
+    return opened ~= nil and opened.tab ~= nil
+  end, 240000, "the recording's session")
+  if opened == nil then
+    return
+  end
+  t.check(#vim.api.nvim_list_tabpages() == tabs + 1, "a new tab page")
+  t.check(opened.tab ~= first.tab, "not the first session's")
+  t.check(vim.fn.isdirectory(opened.trace) == 1, "a recording folder: " .. tostring(opened.trace))
+  t.check(
+    t.wait_for(function()
+      return opened.position ~= nil
+    end, 60000, "the recording's position"),
+    "positioned"
+  )
+end)
+
+t.case("the server stops cleanly", function()
+  local done = false
+  ct.stop(function()
+    done = true
+  end)
+  t.check(
+    t.wait_for(function()
+      return done
+    end, 20000, "the stop"),
+    "stopped"
+  )
+end)
+
+t.run()

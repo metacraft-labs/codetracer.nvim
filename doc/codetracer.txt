@@ -103,6 +103,25 @@ The plugin works without calling `setup`; call it to change the defaults: >lua
 :CodeTracer stop                                          *:CodeTracer-stop*
     Stop the pane server, closing every session.
 
+                                                       *codetracer-controls*
+The debugger controls — reverse and forward Next, Step in, Step out and
+Continue, Run to entry, Stop — are drawn at the right of the |tabline| while
+a session's tab page is current: click one to run it. A control that cannot
+act at this stop (going backwards from the recording's start) is dimmed and
+does nothing. The controls are the ones CodeTracer's terminal draws in its
+top bar, in the same order.
+
+CodeTracer takes the tab line only when you have not set 'tabline' yourself,
+and gives it back when the last session closes. If a plugin owns your tab
+line or status line, place the strip yourself — it is a status line string,
+"" outside a session: >lua
+
+  -- lualine
+  sections = { lualine_x = { require("codetracer").controls } }
+<
+with `setup({ controls = "component" })`. `controls_glyphs` picks how a
+control is drawn: "unicode" (the default), "nerd" or "text".
+
 ==============================================================================
 4. SESSIONS AND LAYOUTS                                    *codetracer-layouts*
 
@@ -120,6 +139,21 @@ window, is recorded in that mode's layout, so leaving the mode and coming back
 restores your arrangement.
 
 Switching tab pages switches the session the server acts on.
+
+                                                     *codetracer-edit-mode*
+Edit mode works on a project: the directory Neovim was in when the pane
+server started (|:pwd|), as `ct replay`'s is the shell's. Its Files pane lists
+that project (a row opens its file in the source window), and the Test
+Results, Build Output and Problems panes run its tests and builds.
+
+A recording CodeTracer makes for you — a test recorded from the Test Results
+pane, a Nim compile-time trace — opens as a session of its own, in a new tab
+page; with the "current tab" placement it takes the place of the session it
+was started from.
+
+An operation the session cannot perform now (a disabled control, a test that
+is no longer listed) is refused, and the reason is shown with
+|vim.notify()| as a warning.
 
 ==============================================================================
 5. PANES                                                     *codetracer-panes*
@@ -157,6 +191,21 @@ mappings, so `:map <buffer>` lists them. In order of precedence:
 
 The keys you take are reported to the server, so CodeTracer's own keymap help
 shows them as the editor's. `:` and `<C-w>` are always left to Neovim.
+
+In a session's source buffer, while its tab page is current, CodeTracer binds
+the debugger's keys of your CodeTracer keymap — stepping, continuing, the
+breakpoint and tracepoint toggles — but only the function-key chords
+(`<F10>`, `<S-F11>`, …), which no normal-mode command uses. A key you map
+yourself, in the buffer or globally, is left yours. `setup({ source_keys =
+false })` binds none.
+
+Every debugger operation is also a |<Plug>| mapping, for any key you choose: >lua
+
+  vim.keymap.set("n", "<leader>n", "<Plug>(codetracer-step-over)")
+<
+`<Plug>(codetracer-continue)`, `-reverse-continue`, `-step-over`,
+`-reverse-step-over`, `-step-into`, `-reverse-step-into`, `-step-out`,
+`-reverse-step-out`, `-run-to-entry`, `-stop` and `-toggle-breakpoint`.
 
 ==============================================================================
 7. SOURCE BUFFERS                                           *codetracer-source*

@@ -160,6 +160,9 @@ function M.setup()
     -- selected. The active tab is the selected item; the others sit in the bar.
     CodeTracerStackTab = { link = "WinBarNC", default = true },
     CodeTracerStackTabActive = { link = "PmenuSel", default = true },
+    -- The debugger controls in the tab line (`controls.lua`).
+    CodeTracerControl = { link = "TabLine", default = true },
+    CodeTracerControlDisabled = { link = "Comment", default = true },
     CodeTracerBold = { bold = true, default = true },
     CodeTracerItalic = { italic = true, default = true },
     CodeTracerUnderline = { underline = true, default = true },

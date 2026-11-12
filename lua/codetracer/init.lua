@@ -14,6 +14,8 @@ local hl = require("codetracer.highlights")
 local images = require("codetracer.images")
 local files = require("codetracer.files")
 local persist = require("codetracer.persist")
+local controls = require("codetracer.controls")
+local source_keys = require("codetracer.source_keys")
 
 local M = {}
 
@@ -35,6 +37,33 @@ M.defaults = {
   --- left out of the layouts, and `:CodeTracer sources` lists the recording's
   --- files, opening those not on disk as read-only buffers.
   panels = { fileTree = "codetracer" },
+  --- The debugger controls (`:help codetracer-controls`): `"tabline"` draws
+  --- them at the right of the tab line when you have not set 'tabline';
+  --- `"component"` leaves the tab line to you, with
+  --- `require("codetracer").controls()` to place; `"none"` shows none.
+  controls = "tabline",
+  --- How a control is drawn: `"unicode"` (symbols every font has),
+  --- `"nerd"` (Nerd Font Codicons) or `"text"` (labels).
+  controls_glyphs = "unicode",
+  --- CodeTracer's debugger keys (F10 and the other function-key chords of
+  --- your CodeTracer keymap) in the session's source buffer while its tab
+  --- page is current; your own mappings win (`:help codetracer-keys`).
+  source_keys = true,
+}
+
+--- The debugger operations offered as `<Plug>(codetracer-…)` mappings.
+M.PLUG = {
+  "debugger.continue",
+  "debugger.reverse-continue",
+  "debugger.step-over",
+  "debugger.reverse-step-over",
+  "debugger.step-into",
+  "debugger.reverse-step-into",
+  "debugger.step-out",
+  "debugger.reverse-step-out",
+  "debugger.run-to-entry",
+  "debugger.stop",
+  "editor.toggle-breakpoint",
 }
 
 local function server_cmd()
@@ -50,6 +79,8 @@ M.server_cmd = server_cmd
 -- Notifications
 -- ---------------------------------------------------------------------------
 
+local session_opened -- defined with the sessions, below
+
 local function on_notification(method, params)
   local session = params.session and state.sessions[params.session]
   if method == "pane/content" then
@@ -57,7 +88,9 @@ local function on_notification(method, params)
       panes.apply_content(session, params)
     end
   elseif method == "pane/keymap" then
-    if session then
+    if session and params.pane == "editor" then
+      source_keys.apply(session, params)
+    elseif session then
       panes.apply_keymap(session, params)
     end
   elseif method == "layout/changed" then
@@ -88,6 +121,12 @@ local function on_notification(method, params)
   elseif method == "source/decorations" then
     if session then
       source.apply_decorations(session, params)
+    end
+  elseif method == "session/opened" then
+    session_opened(params)
+  elseif method == "controls/state" then
+    if session then
+      controls.apply(session, params)
     end
   end
   vim.api.nvim_exec_autocmds(
@@ -148,12 +187,49 @@ function M.stop(on_done)
     end
   end
   state.sessions = {}
+  controls.sync()
   rpc.stop(state.conn, on_done)
 end
 
 -- ---------------------------------------------------------------------------
 -- Sessions
 -- ---------------------------------------------------------------------------
+
+--- The plugin's record of a session the server opened (`session/open`'s
+--- answer, or `session/opened`).
+function M.new_session(trace, result)
+  local session = {
+    id = result.session,
+    trace = trace,
+    mode = result.mode,
+    layout = result.layout,
+    panes = {},
+    windows = {},
+    expected_sizes = {},
+    realising = false,
+    graphics = result.graphics,
+  }
+  state.sessions[session.id] = session
+  M.operations(function() end)
+  return session
+end
+
+--- A recording the server opened itself — a test recorded from the Test
+--- Results pane or the source, a Nim trace — shown in a tab page of its own.
+--- With `replaces` (the "current tab" placement) the session it replaces is
+--- closed once the new one is shown.
+session_opened = function(params)
+  if state.sessions[params.session] then
+    return
+  end
+  local session = M.new_session(params.trace, params)
+  layout.realise(session, params.layout)
+  local old = params.replaces and state.sessions[params.replaces]
+  if old then
+    M.close(old)
+  end
+  vim.notify("codetracer: opened " .. (params.title ~= "" and params.title or params.trace), vim.log.levels.INFO)
+end
 
 --- Open a recording in a new session, in its own tab page.
 ---@param trace string the recording's folder
@@ -175,19 +251,7 @@ function M.open(trace, cb, adopt)
         end
         return
       end
-      local session = {
-        id = result.session,
-        trace = trace,
-        mode = result.mode,
-        layout = result.layout,
-        panes = {},
-        windows = {},
-        expected_sizes = {},
-        realising = false,
-        graphics = result.graphics,
-      }
-      state.sessions[session.id] = session
-      M.operations(function() end)
+      local session = M.new_session(trace, result)
       if adopt and adopt.tab and vim.api.nvim_tabpage_is_valid(adopt.tab) then
         session.pending_adopt = adopt
         if result.mode == adopt.mode then
@@ -225,6 +289,7 @@ function M.close(session)
   end
   rpc.request(state.conn, "session/close", { session = session.id })
   state.sessions[session.id] = nil
+  controls.sync()
   if session.tab and vim.api.nvim_tabpage_is_valid(session.tab) and #vim.api.nvim_list_tabpages() > 1 then
     pcall(vim.cmd, "tabclose " .. vim.api.nvim_tabpage_get_number(session.tab))
   end
@@ -269,6 +334,10 @@ function M.run(operation, argument, session)
   rpc.request(state.conn, "operation/run", params, function(err, result)
     if err then
       vim.notify("codetracer: " .. operation .. ": " .. (err.message or vim.inspect(err)), vim.log.levels.WARN)
+    elseif result and result.ok == false then
+      -- Refused: disabled now, or nothing this session can do; the reason
+      -- is the server's (`:help codetracer-commands`).
+      vim.notify("codetracer: " .. operation .. ": " .. tostring(result.detail), vim.log.levels.WARN)
     elseif result and result.detail and result.detail ~= "" then
       vim.notify("codetracer: " .. result.detail, vim.log.levels.INFO)
     end
@@ -417,6 +486,20 @@ function M.setup(opts)
   hl.setup()
   group = vim.api.nvim_create_augroup("codetracer", { clear = true })
   vim.api.nvim_create_autocmd("ColorScheme", { group = group, callback = hl.setup })
+  -- The source buffer's debugger keys follow the tab page and its source
+  -- window (`source_keys.sync`).
+  vim.api.nvim_create_autocmd({ "TabEnter", "TabLeave", "BufWinEnter", "WinEnter" }, {
+    group = group,
+    callback = function()
+      vim.schedule(source_keys.sync)
+    end,
+  })
+  for _, op in ipairs(M.PLUG) do
+    local short = op:match("%.([^%.]+)$")
+    vim.keymap.set("n", "<Plug>(codetracer-" .. short .. ")", function()
+      M.run(op)
+    end, { desc = "codetracer: " .. op })
+  end
   vim.api.nvim_create_autocmd("WinResized", {
     group = group,
     callback = function()
@@ -472,6 +555,12 @@ function M.setup(opts)
       end
     end,
   })
+end
+
+--- The debugger controls of the current tab page's session, as a status line
+--- or tab line component (`:help codetracer-controls`): "" outside a session.
+function M.controls()
+  return controls.component()
 end
 
 return M

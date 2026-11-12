@@ -167,6 +167,98 @@ t.case("a mode change re-arranges the tab page; returning restores the debug lay
   t.eq(shown(first), debug_panes, "the debug layout's panes again")
 end)
 
+t.case("the debugger controls are a strip in the tab line; a click steps", function()
+  vim.api.nvim_set_current_tabpage(first.tab)
+  local controls = require("codetracer.controls")
+  t.wait_for(function()
+    return first.controls ~= nil
+  end, 15000, "controls/state")
+  t.eq(vim.o.tabline, controls.EXPR, "the tab line is CodeTracer's (it was unset)")
+  local index, reverse
+  for i, b in ipairs(first.controls or {}) do
+    if b.id == "next" then
+      index = i
+    elseif b.id == "reverse-next" then
+      reverse = i
+    end
+  end
+  t.check(index ~= nil, "a Next control")
+  t.check(#(first.controls or {}) == 10, "ten controls: nine motions and Stop")
+  -- Rendered: each enabled control a click region in the tab line.
+  local drawn = vim.api.nvim_eval_statusline(vim.o.tabline, { use_tabline = true }).str
+  t.check(drawn:find("↷", 1, true) ~= nil, "Next's glyph is drawn: " .. drawn)
+  t.check(controls.strip(first):find("CodeTracerControlClick", 1, true) ~= nil, "with a click region")
+  -- At the recording's start nothing goes backwards: a disabled control
+  -- sends nothing.
+  local tick = first.position.tick
+  if reverse and not first.controls[reverse].enabled then
+    _G.CodeTracerControlClick(reverse, 1, "l", "")
+    t.sleep(500)
+    t.eq(first.position.tick, tick, "a disabled control does nothing")
+  end
+  _G.CodeTracerControlClick(index, 1, "l", "")
+  t.check(
+    t.wait_for(function()
+      return first.position.tick ~= tick
+    end, 30000, "the click's step"),
+    "Next stepped"
+  )
+end)
+
+t.case("the debugger's keys work in the source buffer; the user's own win", function()
+  vim.api.nvim_set_current_tabpage(first.tab)
+  vim.api.nvim_set_current_win(first.editor_win)
+  local source_keys = require("codetracer.source_keys")
+  local buf = vim.api.nvim_win_get_buf(first.editor_win)
+  t.wait_for(function()
+    return source_keys.bound()[buf] ~= nil
+  end, 15000, "the source buffer's keys")
+  -- The user's CodeTracer keymap names the key; only function keys are bound.
+  local step, other
+  for _, b in ipairs(source_keys.bindings(first)) do
+    t.check(b.lhs:match("^<[%a%-]*[Ff]%d+>$") ~= nil, "a function key: " .. b.lhs)
+    if b.operation == "debugger.step-over" and step == nil then
+      step = b.lhs
+    elseif other == nil then
+      other = b.lhs
+    end
+  end
+  t.check(step ~= nil, "step over has a function key: " .. vim.inspect(source_keys.bindings(first)))
+  if step == nil then
+    return
+  end
+  t.eq(vim.fn.maparg(step, "n", false, true).buffer, 1, "bound in the source buffer")
+  local tick = first.position.tick
+  vim.api.nvim_feedkeys(vim.keycode(step), "x", false)
+  t.check(
+    t.wait_for(function()
+      return first.position.tick ~= tick
+    end, 30000, "the key's step"),
+    step .. " stepped over"
+  )
+  -- A key the user maps globally is theirs.
+  if other then
+    local hit = false
+    vim.keymap.set("n", other, function()
+      hit = true
+    end)
+    source_keys.unbind(buf)
+    source_keys.sync()
+    local m = vim.fn.maparg(other, "n", false, true)
+    t.check(m.buffer ~= 1, "the user's " .. other .. " is not shadowed")
+    vim.api.nvim_feedkeys(vim.keycode(other), "x", false)
+    t.check(hit, "the user's mapping ran")
+    vim.keymap.del("n", other)
+  end
+  -- Leaving the tab page takes the keys away.
+  vim.cmd("tabnew")
+  source_keys.sync()
+  t.check(source_keys.bound()[buf] == nil, "unbound outside the session's tab")
+  vim.cmd("tabclose")
+  vim.api.nvim_set_current_tabpage(first.tab)
+  source_keys.sync()
+end)
+
 t.case("a step moves the position and updates the panes", function()
   vim.api.nvim_set_current_tabpage(first.tab)
   local tick = first.position.tick
@@ -434,6 +526,8 @@ t.case("the server stops cleanly", function()
   t.wait_for(function()
     return done
   end, 10000, "shutdown")
+  -- The tab line the user had (none) is given back.
+  t.eq(vim.o.tabline, "", "the tab line is the user's again")
 end)
 
 t.run()

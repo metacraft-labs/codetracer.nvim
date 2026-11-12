@@ -37,13 +37,19 @@ test-unit:
 # CODETRACER_TEST_GFX_STREAM (a gfx stream, e.g. codetracer-visual-replay's
 # tests/corpus_phase1/mpv, to give the recording graphics); they report NOT
 # RUN, failing, without them.
-test-integration: test-integration-panes test-integration-roles test-integration-sessions test-image-nvim
+test-integration: test-integration-panes test-integration-roles test-integration-sessions test-integration-edit test-image-nvim
 
 test-integration-panes:
     {{nvim}} -c "luafile tests/integration_spec.lua"
 
 test-integration-roles:
     {{nvim}} -c "luafile tests/integration_roles_spec.lua"
+
+# Edit-mode services: a test recorded from Test Results opens as a session of
+# its own. Also needs `ct` ($CT_BIN, or on PATH) and `nargo` on PATH — the
+# real `ct record-test` records CodeTracer's two-test Noir crate.
+test-integration-edit:
+    {{nvim}} -c "luafile tests/edit_mode_spec.lua"
 
 # :mksession in one Neovim, `nvim -S` in another.
 test-integration-sessions:
