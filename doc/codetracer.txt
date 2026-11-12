@@ -65,9 +65,10 @@ The plugin works without calling `setup`; call it to change the defaults: >lua
 ==============================================================================
 3. COMMANDS                                               *codetracer-commands*
 
-:CodeTracer open [{trace}]                               *:CodeTracer-open*
-    Open the recording in folder {trace} (default: the current directory)
-    in a new session, in its own tab page.
+:CodeTracer open [{folder}]                              *:CodeTracer-open*
+    Open {folder} (default: the current directory) in a new session, in its
+    own tab page: the recording, when the folder holds one; otherwise the
+    folder as a project, in edit mode, with no recording.
 
 :CodeTracer {operation} [{argument}]                          *:CodeTracer*
     Run an operation of CodeTracer's catalogue on the current tab page's

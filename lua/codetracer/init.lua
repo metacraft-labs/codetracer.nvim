@@ -241,16 +241,20 @@ session_opened = function(params)
   vim.notify("codetracer: opened " .. (params.title ~= "" and params.title or params.trace), vim.log.levels.INFO)
 end
 
---- Open a recording in a new session, in its own tab page.
----@param trace string the recording's folder
+--- Open a recording, or a project, in a new session, in its own tab page.
+--- A folder is sent as a `project` (Editor-Hosted-Front-Ends §E9): the
+--- server opens the recording when the folder holds one, as `ct` does, and
+--- otherwise an Edit-mode session on the project, with no recording.
+---@param trace string the recording's or the project's folder
 ---@param cb fun(session: codetracer.Session|nil, err: string|nil)|nil
 ---@param adopt {tab: integer, windows: table<integer, string>, mode: string}|nil
 ---  windows a restored session file kept for it (`persist`), adopted instead
 ---  of building the layout afresh
 function M.open(trace, cb, adopt)
   trace = vim.fn.fnamemodify(vim.fn.expand(trace), ":p"):gsub("/$", "")
+  local params = vim.fn.isdirectory(trace) == 1 and { project = trace } or { trace = trace }
   M.with_server(function(conn)
-    rpc.request(conn, "session/open", { trace = trace }, function(err, result)
+    rpc.request(conn, "session/open", params, function(err, result)
       if err then
         vim.notify(
           "codetracer: cannot open " .. trace .. ": " .. (err.message or vim.inspect(err)),

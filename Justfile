@@ -60,7 +60,9 @@ test-integration-nim:
 # The generated C of a Nim line in the Low Level Code pane, over the native
 # Nim example recording: also needs $CODETRACER_TEST_NATIVE_NIM_TRACE
 # (codetracer-example-recordings/nim/flow_test) and the native backend
-# ($CODETRACER_CT_NATIVE_REPLAY_CMD, ct-native-replay).
+# ($CODETRACER_CT_NATIVE_REPLAY_CMD, ct-native-replay); its edit-mode cases
+# (a project folder, no recording, its Nim file compiled to C now) need
+# `nim` on PATH.
 test-integration-generated-c:
     {{nvim}} -c "luafile tests/generated_c_spec.lua"
 

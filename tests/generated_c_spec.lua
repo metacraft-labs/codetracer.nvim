@@ -9,6 +9,9 @@
 --- `nim_flow_test.nim` that bundles its generated C), replayed by the native
 --- backend ($CODETRACER_CT_NATIVE_REPLAY_CMD).
 ---
+--- The last cases open a project folder (no recording) in edit mode and
+--- compile its Nim file with the real `nim` on PATH (HSF-E11).
+---
 --- Run: just test-integration-generated-c (see the Justfile).
 local root = vim.fn.getcwd()
 vim.opt.runtimepath:prepend(root)
@@ -91,6 +94,75 @@ t.case(":CodeTracer generated-c shows the line's C in the Low Level Code pane", 
       return text:find("#line", 1, true) ~= nil
     end, 60000, "the generated C's line directives in the pane"),
     "the pane shows the generated C:\n" .. tostring(text)
+  )
+end)
+
+-- Editor-Hosted-Front-Ends §E9 and HSF-E11: a folder that holds no
+-- recording opens as a PROJECT, in edit mode, and `:CodeTracer generated-c`
+-- there compiles the edited file with the real `nim` (on PATH) and shows the
+-- C of the cursor's line — below forty procs' C, so "shown" means scrolled to.
+local project
+local zebra_line = 42
+
+t.case(":CodeTracer open on a project folder opens an edit-mode session", function()
+  local dir = vim.fn.tempname()
+  vim.fn.mkdir(dir, "p")
+  local lines = {}
+  for i = 1, 40 do
+    lines[#lines + 1] = ("proc filler%d(): int = %d"):format(i, i)
+  end
+  vim.list_extend(lines, {
+    "proc triple(n: int): int =",
+    "  let zebraCount = n * 3",
+    "  result = zebraCount + 1",
+    "",
+    "echo triple(14)",
+  })
+  vim.fn.writefile(lines, dir .. "/tiny.nim")
+  ct.open(dir, function(x)
+    project = x
+  end)
+  t.check(
+    t.wait_for(function()
+      return project ~= nil and project.tab ~= nil
+    end, 60000, "the project session"),
+    "opened"
+  )
+  if project == nil then
+    return
+  end
+  t.eq(project.mode, "edit", "a project opens in edit mode")
+  project.dir = dir
+end)
+
+t.case(":CodeTracer generated-c in edit mode shows the compiled C of the cursor's line", function()
+  if project == nil or project.editor_win == nil then
+    t.check(false, "no project session to run in")
+    return
+  end
+  vim.api.nvim_set_current_tabpage(project.tab)
+  vim.api.nvim_set_current_win(project.editor_win)
+  vim.cmd("edit " .. vim.fn.fnameescape(project.dir .. "/tiny.nim"))
+  vim.api.nvim_win_set_cursor(project.editor_win, { zebra_line, 2 })
+  vim.cmd("CodeTracer generated-c")
+  local win
+  t.wait_for(function()
+    win = window_of(project, "lowLevelCode")
+    return win ~= nil
+  end, 60000, "the Low Level Code window the layout now places")
+  if win == nil then
+    t.check(false, "no Low Level Code window")
+    return
+  end
+  local text
+  t.check(
+    t.wait_for(function()
+      text = table.concat(vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(win), 0, -1, false), "\n")
+      return text:find("zebraCount", 1, true) ~= nil
+      -- The pane holds only the rows its window shows, and the line's C is
+      -- far below the file's top: found means scrolled to.
+    end, 120000, "the compiled C of the cursor's line in view"),
+    "the pane shows the line's C:\n" .. tostring(text)
   )
 end)
 

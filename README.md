@@ -30,7 +30,7 @@ or as a Nix package: `packages.<system>.default` of this repository's flake.
 ## Use
 
 ```vim
-:CodeTracer open path/to/recording
+:CodeTracer open path/to/recording   " or a project folder, in edit mode
 :CodeTracer step-over
 :CodeTracer mode
 ```
