@@ -37,7 +37,7 @@ test-unit:
 # CODETRACER_TEST_GFX_STREAM (a gfx stream, e.g. codetracer-visual-replay's
 # tests/corpus_phase1/mpv, to give the recording graphics); they report NOT
 # RUN, failing, without them.
-test-integration: test-integration-panes test-integration-roles test-integration-sessions test-integration-edit test-integration-nim test-image-nvim
+test-integration: test-integration-panes test-integration-roles test-integration-sessions test-integration-edit test-integration-nim test-integration-generated-c test-image-nvim
 
 test-integration-panes:
     {{nvim}} -c "luafile tests/integration_spec.lua"
@@ -56,6 +56,13 @@ test-integration-edit:
 # `nim` on PATH — CodeTracer's dev shell provides both.
 test-integration-nim:
     {{nvim}} -c "luafile tests/nim_trace_spec.lua"
+
+# The generated C of a Nim line in the Low Level Code pane, over the native
+# Nim example recording: also needs $CODETRACER_TEST_NATIVE_NIM_TRACE
+# (codetracer-example-recordings/nim/flow_test) and the native backend
+# ($CODETRACER_CT_NATIVE_REPLAY_CMD, ct-native-replay).
+test-integration-generated-c:
+    {{nvim}} -c "luafile tests/generated_c_spec.lua"
 
 # :mksession in one Neovim, `nvim -S` in another.
 test-integration-sessions:

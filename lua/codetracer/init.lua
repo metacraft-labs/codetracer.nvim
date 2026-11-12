@@ -440,6 +440,15 @@ local SUBCOMMANDS = {
       images.toggle_frames(s)
     end
   end,
+  -- Generated-Code-Listing §13.4: the generated C of the line under the
+  -- cursor, and the stop's machine code, in the Low Level Code pane (the
+  -- server places it beside the source).
+  ["generated-c"] = function()
+    require("codetracer.menu").run("view.generated-c-source")
+  end,
+  ["low-level"] = function()
+    M.run("view.low-level-code")
+  end,
   ["test-at-cursor"] = function(args)
     tests.at_cursor(args[1] == "here")
   end,

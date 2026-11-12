@@ -19,6 +19,10 @@ M.ITEMS = {
   { "Trace static block", "editor.trace-static-block-at-cursor" },
   { "Trace constant", "editor.trace-constant-at-cursor" },
   { "Evaluate with nim e", "editor.trace-eval" },
+  -- Generated-Code-Listing §13.4: what the line compiled to, in the Low
+  -- Level Code pane beside the source.
+  { "View generated C", "view.generated-c-source" },
+  { "View disassembly", "view.disassembly" },
 }
 
 local function is_nim(buf)

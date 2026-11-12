@@ -189,6 +189,21 @@ The trace reads the saved file. It needs codetracer-nim's trace-enabled
 nimsuggest (`$CODETRACER_NIMSUGGEST`) and compiler (`nim`), as CodeTracer's
 terminal does; without them the command says what is missing.
 
+                                               *codetracer-generated-code*
+:CodeTracer generated-c                          *:CodeTracer-generated-c*
+    Show the C the Nim line under the cursor compiled to, in the Low Level
+    Code pane beside the source (opened if the layout does not place it),
+    its rows cross-referenced with the source. Read from the recording,
+    which carries the program's generated C; a Nim build writes `#line`
+    directives into it, which is how each C line knows its Nim line.
+
+:CodeTracer low-level                              *:CodeTracer-low-level*
+    Show the stop's machine code in the Low Level Code pane — for a Nim
+    recording, the generated C's. `:CodeTracer view.disassembly` is the
+    same.
+
+Both are in the right-click menu's CodeTracer submenu in a Nim file.
+
 ==============================================================================
 5. PANES                                                     *codetracer-panes*
 
