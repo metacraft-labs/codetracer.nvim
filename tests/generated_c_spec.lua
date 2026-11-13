@@ -166,6 +166,48 @@ t.case(":CodeTracer generated-c in edit mode shows the compiled C of the cursor'
   )
 end)
 
+-- Editor-Hosted §E7: a press on an instruction of the compiled C moves the
+-- source window's cursor to the Nim line it came from — `source/show`
+-- carries the position.
+t.case("a press on the compiled C puts the source window's cursor on its Nim line", function()
+  local lowlevel = project and project.panes.lowLevelCode
+  local win = lowlevel and window_of(project, "lowLevelCode")
+  if win == nil then
+    t.check(false, "no Low Level Code pane to press in")
+    return
+  end
+  local target, at
+  for i = 0, lowlevel.height - 1 do
+    local row = lowlevel.rows[i] or {}
+    if (row.text or ""):find("nimlf_(" .. zebra_line, 1, true) then
+      for _, h in ipairs(row.hotspots or {}) do
+        if h.operation == "low-level.go-to-source-line" then
+          target, at = h, i
+        end
+      end
+    end
+  end
+  t.check(target ~= nil, "the C of line " .. zebra_line .. " offers a press")
+  if target == nil then
+    return
+  end
+  -- The cursor is elsewhere first, so the move is the press's.
+  vim.api.nvim_win_set_cursor(project.editor_win, { 1, 0 })
+  vim.api.nvim_set_current_win(win)
+  vim.api.nvim_win_set_cursor(win, { at + 1, target.start })
+  require("codetracer.panes").activate(lowlevel.buf, false)
+  t.check(
+    t.wait_for(function()
+      return vim.api.nvim_win_get_cursor(project.editor_win)[1] == zebra_line
+    end, 15000, "the source window's cursor on line " .. zebra_line),
+    "cursor at " .. vim.inspect(vim.api.nvim_win_get_cursor(project.editor_win))
+  )
+  t.check(
+    vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(project.editor_win)):match("tiny%.nim$") ~= nil,
+    "the source window shows tiny.nim"
+  )
+end)
+
 t.case("the server stops cleanly", function()
   local done = false
   ct.stop(function()

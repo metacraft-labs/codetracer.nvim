@@ -121,7 +121,7 @@ local function on_notification(method, params)
     end
   elseif method == "source/show" then
     if session then
-      files.show(session, params.file)
+      files.show(session, params.file, params.line, params.column)
     end
   elseif method == "source/decorations" then
     if session then

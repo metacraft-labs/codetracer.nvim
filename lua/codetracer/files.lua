@@ -227,13 +227,24 @@ function M.report_selection(filetype)
 end
 
 --- Apply `source/show`: a pane opened a file (a row of CodeTracer's file
---- pane, a search result); show it in the source window — the recorded
---- text, read-only, when it is not on disk.
-function M.show(session, file)
+--- pane, a search result, an instruction of the generated C); show it in
+--- the source window — the recorded text, read-only, when it is not on
+--- disk — with the cursor at `line` and `column` when the server names a
+--- place (1-based; the column in bytes, the protocol's UTF-8 encoding).
+---@param line integer|nil
+---@param column integer|nil
+function M.show(session, file, line, column)
   M.source_buffer(session, file, function(buf)
     local win = session.editor_win
     if buf and win and vim.api.nvim_win_is_valid(win) then
       vim.api.nvim_win_set_buf(win, buf)
+      if type(line) == "number" and line > 0 then
+        local last = vim.api.nvim_buf_line_count(buf)
+        local row = math.min(line, last)
+        local text = vim.api.nvim_buf_get_lines(buf, row - 1, row, false)[1] or ""
+        local col = math.max(0, math.min((type(column) == "number" and column or 1) - 1, #text))
+        vim.api.nvim_win_set_cursor(win, { row, col })
+      end
       require("codetracer.source").report_viewport(session)
     end
   end)
