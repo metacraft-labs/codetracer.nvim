@@ -205,6 +205,19 @@ terminal does; without them the command says what is missing.
 
 Both are in the right-click menu's CodeTracer submenu in a Nim file.
 
+                                               *codetracer-macro-expansion*
+:CodeTracer macro-expansion                  *:CodeTracer-macro-expansion*
+    Toggle Macro Expansion on the Nim macro or template call under the
+    cursor: the code it expanded to opens in the Macro Expansion pane
+    beside the source (`ct://{session}/macroExpansion`, placed if the
+    layout does not hold it), under a heading naming the call. While a
+    call is expanded, a step into its expansion stops inside it: the
+    source window stays on the call's line and the pane marks the
+    expansion's row with `▸`. Run it again on the call, or press <CR> on
+    the pane's heading, to close the expansion; stepping then treats the
+    call as one line again. Also "Toggle macro expansion" in the
+    right-click menu's CodeTracer submenu in a Nim file.
+
 ==============================================================================
 5. PANES                                                     *codetracer-panes*
 

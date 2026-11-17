@@ -23,6 +23,9 @@ M.ITEMS = {
   -- Level Code pane beside the source.
   { "View generated C", "view.generated-c-source" },
   { "View disassembly", "view.disassembly" },
+  -- Editor-Hosted-Front-Ends §E15: the code the macro call under the cursor
+  -- expanded to, in the Macro Expansion pane beside the source (or closed).
+  { "Toggle macro expansion", "editor.toggle-macro-expansion" },
 }
 
 local function is_nim(buf)

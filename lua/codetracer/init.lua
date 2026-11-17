@@ -453,6 +453,12 @@ local SUBCOMMANDS = {
   ["low-level"] = function()
     M.run("view.low-level-code")
   end,
+  -- Editor-Hosted-Front-Ends §E15: Toggle Macro Expansion on the macro call
+  -- under the cursor. The server places the Macro Expansion pane beside the
+  -- source when the expansion opens; a step inside it is that pane's `▸` row.
+  ["macro-expansion"] = function()
+    require("codetracer.menu").run("editor.toggle-macro-expansion")
+  end,
   ["test-at-cursor"] = function(args)
     tests.at_cursor(args[1] == "here")
   end,

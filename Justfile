@@ -37,7 +37,7 @@ test-unit:
 # CODETRACER_TEST_GFX_STREAM (a gfx stream, e.g. codetracer-visual-replay's
 # tests/corpus_phase1/mpv, to give the recording graphics); they report NOT
 # RUN, failing, without them.
-test-integration: test-integration-panes test-integration-roles test-integration-sessions test-integration-edit test-integration-nim test-integration-generated-c test-image-nvim
+test-integration: test-integration-panes test-integration-roles test-integration-sessions test-integration-edit test-integration-nim test-integration-generated-c test-integration-macro test-image-nvim
 
 test-integration-panes:
     {{nvim}} -c "luafile tests/integration_spec.lua"
@@ -65,6 +65,13 @@ test-integration-nim:
 # `nim` on PATH.
 test-integration-generated-c:
     {{nvim}} -c "luafile tests/generated_c_spec.lua"
+
+# Toggle Macro Expansion (Editor-Hosted-Front-Ends §E15): also needs
+# $CODETRACER_TEST_NIM_MACRO_TRACE, the `ct record` recording of CodeTracer's
+# test-programs/nim_macro_steps/main.nim, and the native backend
+# ($CODETRACER_CT_NATIVE_REPLAY_CMD; ct-mcr through $CODETRACER_CT_MCR_CMD).
+test-integration-macro:
+    {{nvim}} -c "luafile tests/macro_expansion_spec.lua"
 
 # :mksession in one Neovim, `nvim -S` in another.
 test-integration-sessions:
