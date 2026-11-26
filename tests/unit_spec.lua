@@ -53,6 +53,24 @@ t.case("a semantic style names a CodeTracer highlight group", function()
   t.eq(def.link, "Type", "default link")
 end)
 
+t.case("a trace's outcome replaces its 'Tracing...' on the message line", function()
+  local ct = require("codetracer")
+  local shown = {}
+  local notify = vim.notify
+  vim.notify = function(msg, level)
+    shown[#shown + 1] = { msg = msg, level = level }
+  end
+  ct.trace_settled({ session = 1, outcome = "failed", message = "tracing.nim(2, 16) Error: type mismatch" })
+  ct.trace_settled({ session = 1, outcome = "done", message = "Trace static block: recorded trace.json" })
+  ct.trace_settled({ session = 1, outcome = "failed", message = "" })
+  vim.notify = notify
+  t.eq(#shown, 3, "one message per outcome")
+  t.eq(shown[1].msg, "codetracer: tracing.nim(2, 16) Error: type mismatch", "the refusal's words")
+  t.eq(shown[1].level, vim.log.levels.WARN, "a refusal warns")
+  t.eq(shown[2].level, vim.log.levels.INFO, "a recording informs")
+  t.eq(shown[3].msg, "codetracer: the trace recorded nothing", "an empty message still says how it ended")
+end)
+
 t.case("a layout keeps only what the editor can show", function()
   local state = require("codetracer.state")
   state.conn = { info = { capabilities = { panes = { "calltrace", "state", "eventLog" } } } }

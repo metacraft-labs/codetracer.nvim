@@ -86,6 +86,17 @@ M.server_cmd = server_cmd
 
 local session_opened -- defined with the sessions, below
 
+--- `trace/settled`: how a Nim trace ended (Editor-Hosted-Front-Ends §E12).
+--- Its start was the answer to the operation ("Tracing macro expansion...");
+--- a trace that records nothing opens no session, so without this the
+--- message line kept saying "Tracing..." after the compiler had refused.
+--- A recording that opened is announced by `session/opened` as well.
+function M.trace_settled(params)
+  local message = params.message ~= nil and params.message ~= "" and params.message
+    or (params.outcome == "done" and "the trace is recorded" or "the trace recorded nothing")
+  vim.notify("codetracer: " .. message, params.outcome == "done" and vim.log.levels.INFO or vim.log.levels.WARN)
+end
+
 local function on_notification(method, params)
   local session = params.session and state.sessions[params.session]
   if method == "pane/content" then
@@ -137,6 +148,8 @@ local function on_notification(method, params)
     if session then
       tests.apply(session, params)
     end
+  elseif method == "trace/settled" then
+    M.trace_settled(params)
   end
   vim.api.nvim_exec_autocmds(
     "User",
